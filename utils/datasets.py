@@ -7,20 +7,13 @@ import numpy as np
 from utils import augmentations, geofiles, paths
 
 
-class AbstractUrbanExtractionDataset(torch.utils.data.Dataset):
+class AbstractPopulationMappingDataset(torch.utils.data.Dataset):
 
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
-
         dirs = paths.load_paths()
         self.root_path = Path(dirs.DATASET)
-
-        # creating boolean feature vector to subset sentinel 1 and sentinel 2 bands
-        s1_bands = ['VV', 'VH']
-        self.s1_indices = self._get_indices(s1_bands, cfg.DATALOADER.SENTINEL1_BANDS)
-        s2_bands = ['B2', 'B3', 'B4', 'B5', 'B6', 'B6', 'B8', 'B8A', 'B11', 'B12']
-        self.s2_indices = self._get_indices(s2_bands, cfg.DATALOADER.SENTINEL2_BANDS)
 
     @abstractmethod
     def __getitem__(self, index: int) -> dict:
@@ -30,24 +23,15 @@ class AbstractUrbanExtractionDataset(torch.utils.data.Dataset):
     def __len__(self) -> int:
         pass
 
-    def _get_sentinel1_data(self, site, patch_id):
-        file = self.root_path / site / 'sentinel1' / f'sentinel1_{site}_{patch_id}.tif'
-        img, transform, crs = geofiles.read_tif(file)
-        img = img[:, :, self.s1_indices]
-        return np.nan_to_num(img).astype(np.float32), transform, crs
+    def _get_satellite_data(self, city: str, patch_id: str) -> np.ndarray:
+        file = self.root_path / 'satellite_data' / city / f'satellite_data_{city}_{patch_id}.tif'
+        img, _, _ = geofiles.read_tif(file)
+        img = img[:, :, self.cfg.DATALOADER.SATELLITE_BANDS]
+        return np.nan_to_num(img).astype(np.float32)
 
-    def _get_sentinel2_data(self, site, patch_id):
-        file = self.root_path / site / 'sentinel2' / f'sentinel2_{site}_{patch_id}.tif'
-        img, transform, crs = geofiles.read_tif(file)
-        img = img[:, :, self.s2_indices]
-        return np.nan_to_num(img).astype(np.float32), transform, crs
-
-    def _get_label_data(self, site, patch_id):
-        label = self.cfg.DATALOADER.LABEL
-        label_file = self.root_path / site / label / f'{label}_{site}_{patch_id}.tif'
-        img, transform, crs = geofiles.read_tif(label_file)
-        img = img > 0
-        return np.nan_to_num(img).astype(np.float32), transform, crs
+    def _get_population_data(self, city: str, patch_id: str) -> float:
+        # TODO: get population data for grid cell and normalize with cfg pop grid cell max
+        return 1
 
     @staticmethod
     def _get_indices(bands, selection):
@@ -55,84 +39,60 @@ class AbstractUrbanExtractionDataset(torch.utils.data.Dataset):
 
 
 # dataset for urban extraction with building footprints
-class UrbanExtractionDataset(AbstractUrbanExtractionDataset):
+class PopulationMappingDataset(AbstractPopulationMappingDataset):
 
-    def __init__(self, cfg, dataset: str, include_projection: bool = False, no_augmentations: bool = False,
+    def __init__(self, cfg, run_type: str, include_projection: bool = False, no_augmentations: bool = False,
                  include_unlabeled: bool = True):
         super().__init__(cfg)
 
-        self.dataset = dataset
-        if dataset == 'training':
-            self.sites = list(cfg.DATASETS.TRAINING)
-            # using parameter include_unlabeled to overwrite config
-            if include_unlabeled and cfg.DATALOADER.INCLUDE_UNLABELED:
-                self.sites += cfg.DATASETS.UNLABELED
-        elif dataset == 'validation':
-            self.sites = list(cfg.DATASETS.VALIDATION)
-        else:  # used to load only 1 city passed as dataset
-            self.sites = [dataset]
-
+        self.run_type = run_type
+        self.include_projection = include_projection
         self.no_augmentations = no_augmentations
+        self.include_unlabeled = include_unlabeled
+
+        if cfg.DATASET.CITY_SPLIT:
+            self.cities = list(cfg.DATASET.TRAINING) if run_type == 'training' else list(cfg.DATASET.TEST)
+        else:
+            self.cities = list(cfg.DATASET.LABELED_CITIES)
+        if include_unlabeled and cfg.DATALOADER.INCLUDE_UNLABELED:
+            self.cities += cfg.DATASET.UNLABELED_CITIES
+
+        self.samples = []
+        for city in self.cities:
+            metadata_file = self.root_path / f'metadata_{city}.json'
+            metadata = geofiles.load_json(metadata_file)
+            self.samples.extend(metadata['samples'])
+            self.tile_size = metadata['tile_size']
+
+        if not cfg.DATASET.CITY_SPLIT:
+            # TODO: split into training and test and then select only run type
+            pass
+
         if no_augmentations:
             self.transform = transforms.Compose([augmentations.Numpy2Torch()])
         else:
             self.transform = augmentations.compose_transformations(cfg)
 
-        self.samples = []
-        for site in self.sites:
-            samples_file = self.root_path / site / 'samples.json'
-            metadata = geofiles.load_json(samples_file)
-            samples = metadata['samples']
-            # making sure unlabeled data is not used as labeled when labels exist
-            if include_unlabeled and site in cfg.DATASETS.UNLABELED:
-                for sample in samples:
-                    sample['is_labeled'] = False
-            self.samples += samples
         self.length = len(self.samples)
-        self.n_labeled = len([s for s in self.samples if s['is_labeled']])
-
-        self.include_projection = include_projection
 
     def __getitem__(self, index):
 
-        # loading metadata of sample
         sample = self.samples[index]
 
-        site = sample['site']
+        city = sample['city']
         patch_id = sample['patch_id']
-        is_labeled = sample['is_labeled']
 
-        # loading images
-        mode = self.cfg.DATALOADER.MODE
-        if mode == 'optical':
-            img, geotransform, crs = self._get_sentinel2_data(site, patch_id)
-        elif mode == 'sar':
-            img, geotransform, crs = self._get_sentinel1_data(site, patch_id)
-        else:  # fusion baby!!!
-            s1_img, geotransform, crs = self._get_sentinel1_data(site, patch_id)
-            s2_img, _, _ = self._get_sentinel2_data(site, patch_id)
-            img = np.concatenate([s1_img, s2_img], axis=-1)
+        img = self._get_satellite_data(city, patch_id)
+        pop = self._get_population_data(city, patch_id)
 
-        # create dummy label if unlabeled
-        if is_labeled:
-            label, _, _ = self._get_label_data(site, patch_id)
-        else:
-            label = np.zeros((img.shape[0], img.shape[1], 1), dtype=np.float32)
-
-        img, label = self.transform((img, label))
+        img = self.transform(img)
 
         item = {
             'x': img,
-            'y': label,
-            'site': site,
+            'y': pop,
+            'city': city,
             'patch_id': patch_id,
-            'is_labeled': sample['is_labeled'],
-            'image_weight': np.float(sample['img_weight']),
         }
-
-        if self.include_projection:
-            item['transform'] = geotransform
-            item['crs'] = crs
 
         return item
 
@@ -140,118 +100,7 @@ class UrbanExtractionDataset(AbstractUrbanExtractionDataset):
         return self.length
 
     def __str__(self):
-        labeled_perc = self.n_labeled / self.length * 100
-        return f'Dataset with {self.length} samples ({labeled_perc:.1f} % labeled) across {len(self.sites)} sites.'
-
-
-class AbstractSpaceNet7Dataset(torch.utils.data.Dataset):
-
-    def __init__(self, cfg):
-        super().__init__()
-
-        self.cfg = cfg
-
-        dirs = paths.load_paths()
-        self.root_path = Path(dirs.DATASET) / 'sn7'
-
-        # getting patches
-        samples_file = self.root_path / 'samples.json'
-        metadata = geofiles.load_json(samples_file)
-        self.samples = metadata['samples']
-        self.group_names = metadata['group_names']
-        self.length = len(self.samples)
-        s1_bands = metadata['sentinel1_features']
-        s2_bands = metadata['sentinel2_features']
-
-        self.transform = transforms.Compose([augmentations.Numpy2Torch()])
-
-        # creating boolean feature vector to subset sentinel 1 and sentinel 2 bands
-        self.s1_indices = self._get_indices(s1_bands, cfg.DATALOADER.SENTINEL1_BANDS)
-        self.s2_indices = self._get_indices(s2_bands, cfg.DATALOADER.SENTINEL2_BANDS)
-
-    @abstractmethod
-    def __getitem__(self, index: int) -> dict:
-        pass
-
-    def _get_sentinel1_data(self, aoi_id):
-        file = self.root_path / 'sentinel1' / f'sentinel1_{aoi_id}.tif'
-        img, transform, crs = geofiles.read_tif(file)
-        img = img[:, :, self.s1_indices]
-        return np.nan_to_num(img).astype(np.float32), transform, crs
-
-    def _get_sentinel2_data(self, aoi_id):
-        file = self.root_path / 'sentinel2' / f'sentinel2_{aoi_id}.tif'
-        img, transform, crs = geofiles.read_tif(file)
-        img = img[:, :, self.s2_indices]
-        return np.nan_to_num(img).astype(np.float32), transform, crs
-
-    def _get_label_data(self, aoi_id):
-        label = self.cfg.DATALOADER.LABEL
-        label_file = self.root_path / label / f'{label}_{aoi_id}.tif'
-        img, transform, crs = geofiles.read_tif(label_file)
-        img = img > 0
-        return np.nan_to_num(img).astype(np.float32), transform, crs
-
-
-    def get_index(self, aoi_id: str):
-        for i, sample in enumerate(self.samples):
-            if sample['aoi_id'] == aoi_id:
-                return i
-
-    @staticmethod
-    def _get_indices(bands, selection):
-        return [bands.index(band) for band in selection]
-
-    def __len__(self):
-        return self.length
-
-    def __str__(self):
-        return f'Dataset with {self.length} samples.'
-
-
-# dataset for urban extraction with building footprints
-class SpaceNet7Dataset(AbstractSpaceNet7Dataset):
-
-    def __init__(self, cfg):
-        super().__init__(cfg)
-
-    def __getitem__(self, index):
-
-        # loading metadata of sample
-        sample = self.samples[index]
-        aoi_id = sample['aoi_id']
-        group = sample['group']
-        group_name = self.group_names[str(group)]
-
-        # loading images
-        mode = self.cfg.DATALOADER.MODE
-        if mode == 'optical':
-            img, _, _ = self._get_sentinel2_data(aoi_id)
-        elif mode == 'sar':
-            img, _, _ = self._get_sentinel1_data(aoi_id)
-        else:  # fusion baby!!!
-            s1_img, _, _ = self._get_sentinel1_data(aoi_id)
-            s2_img, _, _ = self._get_sentinel2_data(aoi_id)
-
-            img = np.concatenate([s1_img, s2_img], axis=-1)
-
-        label, geotransform, crs = self._get_label_data(aoi_id)
-        img, label = self.transform((img, label))
-
-        item = {
-            'x': img,
-            'y': label,
-            'aoi_id': aoi_id,
-            'country': sample['country'],
-            'group': group,
-            'group_name': group_name,
-            'year': sample['year'],
-            'month': sample['month'],
-            'transform': geotransform,
-            'crs': crs
-        }
-
-        return item
+        return f'Dataset with {self.length} samples across {len(self.cities)} sites.'
 
 
 # dataset for classifying a scene

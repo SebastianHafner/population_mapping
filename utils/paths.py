@@ -6,7 +6,7 @@ from utils import experiment_manager
 HOME = '/home/shafner/population_mapping'
 DATASET = '/storage/shafner/population_mapping/pop_dataset'
 OUTPUT = '/storage/shafner/population_mapping_output'
-RAW_SATELLITE_FILE = '/storage/shafner/population_mapping/Dakar_mosaic_georef2gcp.tif'
+RAW_SATELLITE_DATA = '/storage/shafner/population_mapping/raw_satellite_data'
 
 # TODO: define return type as cfg node from experiment manager
 def load_paths():
@@ -14,7 +14,7 @@ def load_paths():
     C.HOME = HOME
     C.DATASET = DATASET
     C.OUTPUT = OUTPUT
-    C.RAW_SATELLITE_FILE = RAW_SATELLITE_FILE
+    C.RAW_SATELLITE_DATA = RAW_SATELLITE_DATA
     return C.clone()
 
 

@@ -1,7 +1,7 @@
+import torch
 import torchvision.transforms.functional as TF
 from torchvision import transforms
 import numpy as np
-import cv2
 
 
 def compose_transformations(cfg):
@@ -25,40 +25,32 @@ def compose_transformations(cfg):
 
 
 class Numpy2Torch(object):
-    def __call__(self, args):
-        img, label = args
+    def __call__(self, img: np.ndarray) -> torch.Tensor:
         img_tensor = TF.to_tensor(img)
-        label_tensor = TF.to_tensor(label)
-        return img_tensor, label_tensor
+        return img_tensor
 
 
 class RandomFlip(object):
-    def __call__(self, args):
-        img, label = args
+    def __call__(self, img: np.ndarray) -> np.ndarray:
         horizontal_flip = np.random.choice([True, False])
         vertical_flip = np.random.choice([True, False])
 
         if horizontal_flip:
             img = np.flip(img, axis=1)
-            label = np.flip(label, axis=1)
 
         if vertical_flip:
             img = np.flip(img, axis=0)
-            label = np.flip(label, axis=0)
 
         img = img.copy()
-        label = label.copy()
 
-        return img, label
+        return img
 
 
 class RandomRotate(object):
-    def __call__(self, args):
-        img, label = args
+    def __call__(self, img: np.ndarray) -> np.ndarray:
         k = np.random.randint(1, 4) # number of 90 degree rotations
         img = np.rot90(img, k, axes=(0, 1)).copy()
-        label = np.rot90(label, k, axes=(0, 1)).copy()
-        return img, label
+        return img
 
 
 class ColorShift(object):
@@ -66,11 +58,10 @@ class ColorShift(object):
         self.min_factor = min_factor
         self.max_factor = max_factor
 
-    def __call__(self, args):
-        img, label = args
+    def __call__(self, img: np.ndarray) -> np.ndarray:
         factors = np.random.uniform(self.min_factor, self.max_factor, img.shape[-1])
         img_rescaled = np.clip(img * factors[np.newaxis, np.newaxis, :], 0, 1).astype(np.float32)
-        return img_rescaled, label
+        return img_rescaled
 
 
 class GammaCorrection(object):
@@ -79,9 +70,8 @@ class GammaCorrection(object):
         self.min_gamma = min_gamma
         self.max_gamma = max_gamma
 
-    def __call__(self, args):
-        img, label = args
+    def __call__(self, img: np.ndarray) -> np.ndarray:
         gamma = np.random.uniform(self.min_gamma, self.max_gamma, img.shape[-1])
         img_gamma_corrected = np.clip(np.power(img,gamma[np.newaxis, np.newaxis, :]), 0, 1).astype(np.float32)
-        return img_gamma_corrected, label
+        return img_gamma_corrected
 

@@ -27,14 +27,14 @@ def run_training(cfg):
              }
     print(tabulate(table, headers='keys', tablefmt="fancy_grid", ))
 
-    net = networks.create_network(cfg)
+    net = networks.CustomNet(cfg)
     net.to(device)
     optimizer = optim.AdamW(net.parameters(), lr=cfg.TRAINER.LR, weight_decay=0.01)
 
     criterion = loss_functions.get_criterion(cfg.MODEL.LOSS_TYPE)
 
     # reset the generators
-    dataset = datasets.UrbanExtractionDataset(cfg=cfg, dataset='training')
+    dataset = datasets.PopulationMappingDataset(cfg=cfg, run_type='training')
     print(dataset)
 
     dataloader_kwargs = {
@@ -53,9 +53,6 @@ def run_training(cfg):
 
     # tracking variables
     global_step = epoch_float = 0
-
-    # for logging
-    thresholds = torch.linspace(0, 1, 101)
 
     for epoch in range(1, epochs + 1):
         print(f'Starting epoch {epoch}/{epochs}.')
@@ -86,10 +83,8 @@ def run_training(cfg):
                 print(f'Logging step {global_step} (epoch {epoch_float:.2f}).')
 
                 # evaluation on sample of training and validation set
-                train_argmaxF1 = evaluation.model_evaluation(net, cfg, device, thresholds, 'training', epoch_float,
-                                                             global_step, max_samples=1_000)
-                _ = evaluation.model_evaluation(net, cfg, device, thresholds, 'validation', epoch_float, global_step,
-                                                specific_index=train_argmaxF1, max_samples=1_000)
+                evaluation.model_evaluation(net, cfg, device, 'training', epoch_float, global_step, max_samples=1_000)
+                evaluation.model_evaluation(net, cfg, device, 'test', epoch_float, global_step, max_samples=1_000)
 
                 # logging
                 time = timeit.default_timer() - start
@@ -105,9 +100,8 @@ def run_training(cfg):
 
             if cfg.DEBUG:
                 # testing evaluation
-                _ = evaluation.model_evaluation(net, cfg, device, thresholds, 'training', epoch_float, global_step,
-                                                max_samples=100)
-                evaluation.model_testing(net, cfg, device, 50, global_step, epoch_float)
+                evaluation.model_evaluation(net, cfg, device, 'training', epoch_float, global_step, max_samples=1_000)
+                evaluation.model_evaluation(net, cfg, device, 'test', epoch_float, global_step, max_samples=1_000)
                 break
             # end of batch
 
@@ -120,10 +114,8 @@ def run_training(cfg):
             networks.save_checkpoint(net, optimizer, epoch, global_step, cfg)
 
             # logs to load network
-            train_argmaxF1 = evaluation.model_evaluation(net, cfg, device, thresholds, 'training', epoch_float,
-                                                         global_step)
-            validation_argmaxF1 = evaluation.model_evaluation(net, cfg, device, thresholds, 'validation', epoch_float,
-                                                              global_step, specific_index=train_argmaxF1)
+            evaluation.model_evaluation(net, cfg, device, 'training', epoch_float, global_step, max_samples=1_000)
+            evaluation.model_evaluation(net, cfg, device, 'test', epoch_float, global_step, max_samples=1_000)
             wandb.log({
                 'net_checkpoint': epoch,
                 'checkpoint_step': global_step,
@@ -152,8 +144,8 @@ if __name__ == '__main__':
     if not cfg.DEBUG:
         wandb.init(
             name=cfg.NAME,
-            project='urban_extraction',
-            tags=['run', 'urban', 'extraction', 'segmentation', ],
+            project='population_mapping',
+            tags=['run', 'population', 'mapping', 'regression', ],
         )
 
     try:
