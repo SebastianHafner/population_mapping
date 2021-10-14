@@ -49,21 +49,21 @@ class CustomNet(nn.Module):
         self.cfg = cfg
 
         if cfg.MODEL.TYPE == 'resnet18':
-            model = torchvision.models.resnet18()
+            self.model = torchvision.models.resnet18()
         elif cfg.MODEL.TYPE == 'alexnet':
-            model = torchvision.models.alexnet()
+            self.model = torchvision.models.alexnet()
         elif cfg.MODEL.TYPE == 'vgg16':
-            model = torchvision.models.vgg16()
+            self.model = torchvision.models.vgg16()
         elif cfg.MODEL.TYPE == 'squeezenet1':
-            model = torchvision.models.squeezenet1_0()
+            self.model = torchvision.models.squeezenet1_0()
         elif cfg.MODEL.TYPE == 'densenet161':
-            model = torchvision.models.densenet161()
+            self.model = torchvision.models.densenet161()
         elif cfg.MODEL.TYPE == 'inceptionv3':
-            model = torchvision.models.inception_v3()
+            self.model = torchvision.models.inception_v3()
         elif cfg.MODEL.TYPE == 'googlenet':
-            model = torchvision.models.googlenet()
+            self.model = torchvision.models.googlenet()
         else:
-            model = None
+            self.model = None
         # shufflenet = models.shufflenet_v2_x1_0()
         # mobilenet_v2 = models.mobilenet_v2()
         # mobilenet_v3_large = models.mobilenet_v3_large()
@@ -73,21 +73,21 @@ class CustomNet(nn.Module):
         # mnasnet = models.mnasnet1_0()
 
         # changing the input channels of the first layer
-        in_channels = cfg.IN_CHANNELS
+        in_channels = cfg.MODEL.IN_CHANNELS
         first_conv_layer = [nn.Conv2d(1, 3, kernel_size=3, stride=1, padding=1, dilation=1, groups=1, bias=True)]
-        first_conv_layer.extend(list(model.features))
-        model.features = nn.Sequential(*first_conv_layer)
+        first_conv_layer.extend(list(self.model.features))
+        self.model.features = nn.Sequential(*first_conv_layer)
 
         # Add a avgpool here
         self.avgpool = nn.AdaptiveAvgPool2d((7, 7))
 
         # Replace the classifier layer
-        self.vgg11.classifier[-1] = nn.Linear(4096, cfg.OUT_CHANNELS)
+        self.model.classifier[-1] = nn.Linear(4096, cfg.MODEL.OUT_CHANNELS)
 
 
     def forward(self, x):
-        x = self.vgg11.features(x)
+        x = self.model.features(x)
         x = self.avgpool(x)
         x = x.view(x.size(0), 512 * 7 * 7)
-        x = self.vgg11.classifier(x)
+        x = self.model.classifier(x)
         return x

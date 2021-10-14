@@ -59,7 +59,7 @@ class PopulationMappingDataset(AbstractPopulationMappingDataset):
 
         self.samples = []
         for city in self.cities:
-            metadata_file = self.root_path / f'metadata_{city}.json'
+            metadata_file = self.root_path / 'satellite_data' / f'metadata_{city}.json'
             metadata = geofiles.load_json(metadata_file)
             self.samples.extend(metadata['samples'])
             self.tile_size = metadata['tile_size']

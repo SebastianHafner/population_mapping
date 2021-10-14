@@ -5,31 +5,28 @@ from torch.nn import functional as F
 
 def get_criterion(loss_type, negative_weight: float = 1, positive_weight: float = 1):
 
-    if loss_type == 'BCEWithLogitsLoss':
-        criterion = nn.BCEWithLogitsLoss()
-    elif loss_type == 'CrossEntropyLoss':
-        balance_weight = [negative_weight, positive_weight]
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        balance_weight = torch.tensor(balance_weight).float().to(device)
-        criterion = nn.CrossEntropyLoss(weight=balance_weight)
-    elif loss_type == 'SoftDiceLoss':
-        criterion = soft_dice_loss
-    elif loss_type == 'SoftDiceSquaredSumLoss':
-        criterion = soft_dice_squared_sum_loss
-    elif loss_type == 'SoftDiceBalancedLoss':
-        criterion = soft_dice_loss_balanced
-    elif loss_type == 'PowerJaccardLoss':
-        criterion = power_jaccard_loss
-    elif loss_type == 'MeanSquareErrorLoss':
-        criterion = nn.MSELoss()
-    elif loss_type == 'IoULoss':
-        criterion = iou_loss
-    elif loss_type == 'DiceLikeLoss':
-        criterion = dice_like_loss
+    if loss_type == 'RMSE':
+        criterion = root_mean_square_error_loss
+    elif loss_type == 'L2':
+        criterion = torch.nn.MSELoss()
+    elif loss_type == 'KLDivergence':
+        criterion = torch.nn.KLDivLoss()
+    elif loss_type == 'SmoothL1':
+        criterion = torch.nn.SmoothL1Loss()
     else:
         raise Exception(f'unknown loss {loss_type}')
 
     return criterion
+
+
+# define rmse loss with pytorch tensor operations
+def root_mean_square_error_loss(logits: torch.Tensor, target: torch.Tensor):
+    # logits shape B, C, H, W
+    probs = torch.nn.functional.softmax(logits, dim=1)
+    nominator = torch.sum(torch.pow(torch.sub(probs, target), 2))
+    denominator = target.numel()
+    output = torch.sqrt(nominator / denominator)
+    return output
 
 
 def soft_dice_loss(y_logit: torch.Tensor, y_true: torch.Tensor):
