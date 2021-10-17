@@ -73,8 +73,8 @@ class CustomNet(nn.Module):
         # mnasnet = models.mnasnet1_0()
 
         # changing the input channels of the first layer
-        in_channels = cfg.MODEL.IN_CHANNELS
-        first_conv_layer = [nn.Conv2d(1, 3, kernel_size=3, stride=1, padding=1, dilation=1, groups=1, bias=True)]
+        first_conv_layer = [nn.Conv2d(cfg.MODEL.IN_CHANNELS, 3, kernel_size=3, stride=1, padding=1, dilation=1,
+                                      groups=1, bias=True)]
         first_conv_layer.extend(list(self.model.features))
         self.model.features = nn.Sequential(*first_conv_layer)
 
@@ -91,3 +91,12 @@ class CustomNet(nn.Module):
         x = x.view(x.size(0), 512 * 7 * 7)
         x = self.model.classifier(x)
         return x
+
+
+if __name__ == '__main__':
+    x = torch.randn(1, 5, 224, 224)
+    model = torchvision.models.vgg16(pretrained=False)  # pretrained=False just for debug reasons
+    first_conv_layer = [nn.Conv2d(5, 3, kernel_size=3, stride=1, padding=1, dilation=1, groups=1, bias=True)]
+    first_conv_layer.extend(list(model.features))
+    model.features = nn.Sequential(*first_conv_layer)
+    output = model(x)

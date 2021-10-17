@@ -67,7 +67,6 @@ def run_training(cfg):
 
             x = batch['x'].to(device)
             y_gts = batch['y'].to(device)
-
             y_pred = net(x)
 
             loss = criterion(y_pred, y_gts)
@@ -83,8 +82,8 @@ def run_training(cfg):
                 print(f'Logging step {global_step} (epoch {epoch_float:.2f}).')
 
                 # evaluation on sample of training and validation set
-                evaluation.model_evaluation(net, cfg, device, 'training', epoch_float, global_step, max_samples=1_000)
-                evaluation.model_evaluation(net, cfg, device, 'test', epoch_float, global_step, max_samples=1_000)
+                evaluation.model_evaluation(net, cfg, 'training', epoch_float, global_step, max_samples=1_000)
+                evaluation.model_evaluation(net, cfg, 'test', epoch_float, global_step, max_samples=1_000)
 
                 # logging
                 time = timeit.default_timer() - start

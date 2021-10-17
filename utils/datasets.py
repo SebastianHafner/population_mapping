@@ -23,15 +23,16 @@ class AbstractPopulationMappingDataset(torch.utils.data.Dataset):
     def __len__(self) -> int:
         pass
 
-    def _get_satellite_data(self, city: str, patch_id: str) -> np.ndarray:
+    def _get_satellite_patch(self, city: str, patch_id: str) -> np.ndarray:
         file = self.root_path / 'satellite_data' / city / f'satellite_data_{city}_{patch_id}.tif'
         img, _, _ = geofiles.read_tif(file)
         img = img[:, :, self.cfg.DATALOADER.SATELLITE_BANDS]
         return np.nan_to_num(img).astype(np.float32)
 
-    def _get_population_data(self, city: str, patch_id: str) -> float:
-        # TODO: get population data for grid cell and normalize with cfg pop grid cell max
-        return 1
+    def _get_population_grid(self, city: str) -> np.ndarray:
+        file = self.root_path / 'population_data' / f'population_data_{city}.tif'
+        pop_grid, _, _ = geofiles.read_tif(file)
+        return pop_grid
 
     @staticmethod
     def _get_indices(bands, selection):
@@ -59,14 +60,17 @@ class PopulationMappingDataset(AbstractPopulationMappingDataset):
 
         self.samples = []
         for city in self.cities:
-            metadata_file = self.root_path / 'satellite_data' / f'metadata_{city}.json'
+            metadata_file = self.root_path / f'metadata_{city}.json'
             metadata = geofiles.load_json(metadata_file)
             self.samples.extend(metadata['samples'])
-            self.tile_size = metadata['tile_size']
+            self.patch_size = metadata['patch_size']
+            self.grid_cell_size = metadata['grid_cell_size']
 
         if not cfg.DATASET.CITY_SPLIT:
-            # TODO: split into training and test and then select only run type
-            pass
+            np.random.seed(cfg.SEED)
+            rand = np.random.rand(len(self.samples))
+            include_samples = rand < 0.7 if run_type == 'training' else rand >= 0.7
+            self.samples = [s for s, include in zip(self.samples, list(include_samples)) if include]
 
         if no_augmentations:
             self.transform = transforms.Compose([augmentations.Numpy2Torch()])
@@ -75,23 +79,31 @@ class PopulationMappingDataset(AbstractPopulationMappingDataset):
 
         self.length = len(self.samples)
 
+    def _get_satellite_data(self, city: str, patch_id: str, i_start: int, j_start: int) -> np.ndarray:
+        patch_data = self._get_satellite_patch(city, patch_id)
+        return patch_data[i_start:i_start + self.grid_cell_size, j_start:j_start + self.grid_cell_size, ]
+
+    def _get_population_data(self, city: str, i: int, j: int) -> float:
+        pop_grid = self._get_population_grid(city)
+        return float(pop_grid[i, j, 0]) / self.cfg.DATALOADER.POP_GRIDCELL_MAX
+
     def __getitem__(self, index):
 
         sample = self.samples[index]
 
         city = sample['city']
         patch_id = sample['patch_id']
+        i, j = sample['i'], sample['j']
+        population = float(sample['population'])
 
-        img = self._get_satellite_data(city, patch_id)
-        pop = self._get_population_data(city, patch_id)
+        img = self._get_satellite_data(city, patch_id, i, j)
+        # pop = self._get_population_data(city, patch_id)
 
         img = self.transform(img)
 
         item = {
             'x': img,
-            'y': pop,
-            'city': city,
-            'patch_id': patch_id,
+            'y': population,
         }
 
         return item
