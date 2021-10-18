@@ -1,5 +1,4 @@
 import sys
-from pathlib import Path
 import os
 import timeit
 
@@ -143,6 +142,7 @@ if __name__ == '__main__':
     if not cfg.DEBUG:
         wandb.init(
             name=cfg.NAME,
+            config=cfg,
             project='population_mapping',
             tags=['run', 'population', 'mapping', 'regression', ],
         )
