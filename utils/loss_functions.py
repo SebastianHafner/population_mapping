@@ -192,3 +192,14 @@ def soft_dice_loss_balanced(input:torch.Tensor, target:torch.Tensor):
     dice_neg =  (2 * negatiev_intersection) / ((1-iflat).sum() + (1-tflat).sum() + eps)
 
     return 1 - dice_pos - dice_neg
+
+
+if __name__ == '__main__':
+    import numpy as np
+    criterion = torch.nn.MSELoss().to('cpu')
+    pred = torch.tensor([-1000, 1, 2]).double()
+    pred = torch.sigmoid(pred)
+    print(pred)
+    gt = torch.tensor([0, 1, 2]).double()
+    mse = criterion(pred, gt)
+    print(mse)

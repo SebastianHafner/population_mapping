@@ -57,7 +57,7 @@ def run_training(cfg):
         print(f'Starting epoch {epoch}/{epochs}.')
 
         start = timeit.default_timer()
-        loss_set = []
+        loss_set, pop_set = [], []
 
         for i, batch in enumerate(dataloader):
 
@@ -68,11 +68,12 @@ def run_training(cfg):
             y_gts = batch['y'].to(device)
             y_pred = net(x)
 
-            loss = criterion(y_pred, y_gts)
+            loss = criterion(y_pred, y_gts.float())
             loss.backward()
             optimizer.step()
 
             loss_set.append(loss.item())
+            pop_set.append(y_gts.flatten())
 
             global_step += 1
             epoch_float = global_step / steps_per_epoch
@@ -86,20 +87,25 @@ def run_training(cfg):
 
                 # logging
                 time = timeit.default_timer() - start
+                pop_set = torch.cat(pop_set)
+                mean_pop = torch.mean(pop_set)
+                null_percentage = torch.sum(pop_set == 0) / torch.numel(pop_set) * 100
                 wandb.log({
                     'loss': np.mean(loss_set),
                     'labeled_percentage': 100,
+                    'mean_population': mean_pop,
+                    'null_percentage': null_percentage,
                     'time': time,
                     'step': global_step,
                     'epoch': epoch_float,
                 })
                 start = timeit.default_timer()
-                loss_set = []
+                loss_set, pop_set = [], []
 
             if cfg.DEBUG:
                 # testing evaluation
-                evaluation.model_evaluation(net, cfg, device, 'training', epoch_float, global_step, max_samples=1_000)
-                evaluation.model_evaluation(net, cfg, device, 'test', epoch_float, global_step, max_samples=1_000)
+                evaluation.model_evaluation(net, cfg, 'training', epoch_float, global_step, max_samples=1_000)
+                evaluation.model_evaluation(net, cfg, 'test', epoch_float, global_step, max_samples=1_000)
                 break
             # end of batch
 
@@ -112,16 +118,8 @@ def run_training(cfg):
             networks.save_checkpoint(net, optimizer, epoch, global_step, cfg)
 
             # logs to load network
-            evaluation.model_evaluation(net, cfg, device, 'training', epoch_float, global_step, max_samples=1_000)
-            evaluation.model_evaluation(net, cfg, device, 'test', epoch_float, global_step, max_samples=1_000)
-            wandb.log({
-                'net_checkpoint': epoch,
-                'checkpoint_step': global_step,
-                'train_threshold': train_argmaxF1 / 100,
-                'validation_threshold': validation_argmaxF1 / 100
-            })
-            if cfg.DATASETS.TESTING is not None:
-                evaluation.model_testing(net, cfg, device, 50, global_step, epoch_float)
+            evaluation.model_evaluation(net, cfg, 'training', epoch_float, global_step)
+            evaluation.model_evaluation(net, cfg, 'test', epoch_float, global_step)
 
 
 if __name__ == '__main__':
@@ -143,7 +141,7 @@ if __name__ == '__main__':
         wandb.init(
             name=cfg.NAME,
             config=cfg,
-            project='population_mapping',
+            entity='population_mapping',
             tags=['run', 'population', 'mapping', 'regression', ],
         )
 

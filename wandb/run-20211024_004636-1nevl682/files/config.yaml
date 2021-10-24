@@ -1,0 +1,106 @@
+wandb_version: 1
+
+AUGMENTATION:
+  desc: null
+  value:
+    COLOR_SHIFT: false
+    GAMMA_CORRECTION: false
+    RANDOM_FLIP: true
+    RANDOM_ROTATE: true
+CONFIG_DIR:
+  desc: null
+  value: config/
+CONSISTENCY_TRAINER:
+  desc: null
+  value:
+    CONSISTENCY_LOSS_TYPE: JaccardLikeLoss
+    LOSS_FACTOR: 0.1
+    WEIGHT_DECAY: 0.998
+DATALOADER:
+  desc: null
+  value:
+    INCLUDE_UNLABELED: false
+    NUM_WORKER: 8
+    POP_GRIDCELL_MAX: 1000
+    REFLECTANCE_MAX: 5000
+    RES_DOWNSAMPLING: 1
+    SATELLITE_BANDS:
+    - 0
+    - 1
+    - 2
+    SHUFFLE: true
+DATASET:
+  desc: null
+  value:
+    CITY_SPLIT: false
+    LABELED_CITIES:
+    - dakar
+    TEST: []
+    TRAINING:
+    - dakar
+DATASETS:
+  desc: null
+  value:
+    TEST: []
+    TRAIN: []
+DEBUG:
+  desc: null
+  value: false
+INFERENCE_CHECKPOINT:
+  desc: null
+  value: 0
+LOG_FREQ:
+  desc: null
+  value: 100
+MAX_EPOCHS:
+  desc: null
+  value: 1
+MODEL:
+  desc: null
+  value:
+    BINARY_CLASSIFICATION: false
+    IN_CHANNELS: 4
+    LOSS_TYPE: L2
+    OUT_CHANNELS: 1
+    TOPOLOGY_CLASSFIER: []
+    TYPE: vgg16
+NAME:
+  desc: null
+  value: debug
+OUTPUT_BASE_DIR:
+  desc: null
+  value: output/
+SAVE_CHECKPOINTS:
+  desc: null
+  value:
+  - 5
+  - 10
+  - 15
+SEED:
+  desc: null
+  value: 7
+TRAINER:
+  desc: null
+  value:
+    BATCH_SIZE: 8
+    CHECKPOINT_PERIOD: 5000
+    EPOCHS: 20
+    LR: 0.0001
+    OPTIMIZER: adamw
+_wandb:
+  desc: null
+  value:
+    cli_version: 0.12.1
+    framework: torch
+    is_jupyter_run: false
+    is_kaggle_kernel: false
+    python_version: 3.7.11
+    start_time: 1635029196
+    t:
+      1:
+      - 1
+      4: 3.7.11
+      5: 0.12.1
+      8:
+      - 3
+      - 5

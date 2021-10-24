@@ -3,6 +3,7 @@ from torchvision import transforms
 from pathlib import Path
 from abc import abstractmethod
 import affine
+import math
 import numpy as np
 from utils import augmentations, geofiles, paths
 
@@ -23,14 +24,14 @@ class AbstractPopulationMappingDataset(torch.utils.data.Dataset):
     def __len__(self) -> int:
         pass
 
-    def _get_satellite_patch(self, city: str, patch_id: str) -> np.ndarray:
-        file = self.root_path / 'satellite_data' / city / f'satellite_data_{city}_{patch_id}.tif'
+    def _get_vhr_patch(self, city: str, patch_id: str) -> np.ndarray:
+        file = self.root_path / 'satellite_data' / city / f'vhr_{city}_{patch_id}.tif'
         img, _, _ = geofiles.read_tif(file)
         img = img[:, :, self.cfg.DATALOADER.SATELLITE_BANDS]
         return np.nan_to_num(img).astype(np.float32)
 
-    def _get_population_grid(self, city: str) -> np.ndarray:
-        file = self.root_path / 'population_data' / f'population_data_{city}.tif'
+    def _get_pop_grid(self, city: str) -> np.ndarray:
+        file = self.root_path / 'population_data' / f'pop_{city}.tif'
         pop_grid, _, _ = geofiles.read_tif(file)
         return pop_grid
 
@@ -66,10 +67,14 @@ class PopulationMappingDataset(AbstractPopulationMappingDataset):
             self.patch_size = metadata['patch_size']
             self.grid_cell_size = metadata['grid_cell_size']
 
+        # removing nan values
+        self.samples = [s for s in self.samples if not math.isnan(s['population'])]
+
         if not cfg.DATASET.CITY_SPLIT:
+            thresh = 0.8
             np.random.seed(cfg.SEED)
             rand = np.random.rand(len(self.samples))
-            include_samples = rand < 0.7 if run_type == 'training' else rand >= 0.7
+            include_samples = rand < thresh if run_type == 'training' else rand >= thresh
             self.samples = [s for s, include in zip(self.samples, list(include_samples)) if include]
 
         if no_augmentations:
@@ -79,12 +84,13 @@ class PopulationMappingDataset(AbstractPopulationMappingDataset):
 
         self.length = len(self.samples)
 
-    def _get_satellite_data(self, city: str, patch_id: str, i_start: int, j_start: int) -> np.ndarray:
-        patch_data = self._get_satellite_patch(city, patch_id)
-        return patch_data[i_start:i_start + self.grid_cell_size, j_start:j_start + self.grid_cell_size, ]
+    def _get_vhr_data(self, city: str, patch_id: str, i_start: int, j_start: int) -> np.ndarray:
+        patch_data = self._get_vhr_patch(city, patch_id)
+        grid_cell_data = patch_data[i_start:i_start + self.grid_cell_size, j_start:j_start + self.grid_cell_size, ]
+        return np.clip(grid_cell_data / self.cfg.DATALOADER.REFLECTANCE_MAX, 0, 1)
 
-    def _get_population_data(self, city: str, i: int, j: int) -> float:
-        pop_grid = self._get_population_grid(city)
+    def _get_pop_data(self, city: str, i: int, j: int) -> float:
+        pop_grid = self._get_pop_grid(city)
         return float(pop_grid[i, j, 0]) / self.cfg.DATALOADER.POP_GRIDCELL_MAX
 
     def __getitem__(self, index):
@@ -96,14 +102,17 @@ class PopulationMappingDataset(AbstractPopulationMappingDataset):
         i, j = sample['i'], sample['j']
         population = float(sample['population'])
 
-        img = self._get_satellite_data(city, patch_id, i, j)
-        # pop = self._get_population_data(city, patch_id)
+        img = self._get_vhr_data(city, patch_id, i, j)
 
+        # pop = self._get_population_data(city, patch_id)
         img = self.transform(img)
 
         item = {
             'x': img,
-            'y': population,
+            'y': torch.tensor([population]),
+            'patch_id': patch_id,
+            'i': i,
+            'j': j,
         }
 
         return item

@@ -14,7 +14,7 @@ def model_evaluation(net: networks.CustomNet, cfg: experiment_manager.CfgNode, r
     dataset = datasets.PopulationMappingDataset(cfg, run_type, no_augmentations=True)
 
     def evaluation_callback(x, y, z):
-        # x img y label z logits
+        # x img y label z pred
         measurer.add_sample(z, y)
 
     num_workers = 0 if cfg.DEBUG else cfg.DATALOADER.NUM_WORKER
@@ -48,13 +48,14 @@ def inference_loop(net: networks.CustomNet, cfg: experiment_manager.CfgNode, dat
     counter = 0
     with torch.no_grad():
         net.eval()
-        for step, batch in enumerate(dataloader):
+        for step, batch in enumerate(tqdm(dataloader)):
             img = batch['x'].to(device)
             label = batch['y'].to(device)
 
-            logits = net(img)
+            pred = net(img)
 
-            callback(img, label, logits)
+            # pop_scale_factor = cfg.DATALOADER.POP_GRIDCELL_MAX
+            callback(img, label, pred)
 
             counter += 1
             if counter == max_samples or cfg.DEBUG:
@@ -66,13 +67,9 @@ class RegressionEvaluation(object):
         self.predictions = []
         self.labels = []
 
-    def add_sample(self, logits: torch.tensor, label: torch.tensor):
-
-        pred = torch.sigmoid(logits)
+    def add_sample(self, pred: torch.tensor, label: torch.tensor):
         pred = pred.float().detach().cpu().numpy()
-
         label = label.float().detach().cpu().numpy()
-
         self.predictions.extend(pred.flatten())
         self.labels.extend(label.flatten())
 

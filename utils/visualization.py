@@ -1,51 +1,23 @@
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 import matplotlib as mpl
-from utils.geotiff import *
 import numpy as np
 from pathlib import Path
+from utils import paths, geofiles
 
 
-def plot_optical(ax, file: Path, vis: str = 'true_color', scale_factor: float = 0.4,
-                 show_title: bool = False):
-    img, _, _ = read_tif(file)
-    band_indices = [2, 1, 0] if vis == 'true_color' else [6, 2, 1]
+def plot_vhr(ax, city: str, patch_id: str, i: int = None, j: int = None, vis: str = 'true_color',
+             scale_factor: float = 0.4):
+    dirs = paths.load_paths()
+    file = Path(dirs.DATASET) / 'satellite_data' / city / f'vhr_{city}_{patch_id}.tif'
+    img, _, _ = geofiles.read_tif(file)
+    if i is not None and j is not None:
+        img = img[i:i+200, j:j+200]
+    band_indices = [0, 1, 2] if vis == 'true_color' else [3, 2, 1]
     bands = img[:, :, band_indices] / scale_factor
     bands = bands.clip(0, 1)
     ax.imshow(bands)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    if show_title:
-        ax.set_title(f'optical ({vis})')
-
-
-def plot_sar(ax, file: Path, vis: str = 'VV', show_title: bool = False):
-    img, _, _ = read_tif(file)
-    band_index = 0 if vis == 'VV' else 1
-    bands = img[:, :, band_index]
-    bands = bands.clip(0, 1)
-    ax.imshow(bands, cmap='gray')
-    ax.set_xticks([])
-    ax.set_yticks([])
-    if show_title:
-        ax.set_title(f'sar ({vis})')
-
-
-def plot_buildings(ax, file: Path, show_title: bool = False):
-    img, _, _ = read_tif(file)
-    img = img > 0
-    img = img if len(img.shape) == 2 else img[:, :, 0]
-    cmap = colors.ListedColormap(['lightgray', 'red'])
-    boundaries = [0, 0.5, 1]
-    norm = colors.BoundaryNorm(boundaries, cmap.N, clip=True)
-    # ax.imshow(img, cmap=cmap, norm=norm)
-    # ax.imshow(img, cmap='Reds', vmin=0, vmax=1.2)
-    # ax.imshow(img, cmap='Reds')
-    ax.imshow(img, cmap='gray', vmin=0, vmax=1)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    if show_title:
-        ax.set_title('ground truth')
+    ax.set_axis_off()
 
 
 def plot_blackwhite(ax, img: np.ndarray):

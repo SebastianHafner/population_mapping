@@ -6,6 +6,7 @@ from utils import paths, experiment_manager
 from copy import deepcopy
 from collections import OrderedDict
 from sys import stderr
+import copy
 
 
 def load_network(cfg: experiment_manager.CfgNode, checkpoint: int = None):
@@ -55,49 +56,63 @@ class CustomNet(nn.Module):
     def __init__(self, cfg):
         super(CustomNet, self).__init__()
         self.cfg = cfg
-
+        pt = cfg.MODEL.PRETRAINED
         if cfg.MODEL.TYPE == 'resnet18':
-            self.model = torchvision.models.resnet18()
+            self.model = torchvision.models.resnet18(pretrained=pt)
         elif cfg.MODEL.TYPE == 'alexnet':
-            self.model = torchvision.models.alexnet()
+            self.model = torchvision.models.alexnet(pretrained=pt)
         elif cfg.MODEL.TYPE == 'vgg16':
-            self.model = torchvision.models.vgg16()
+            self.model = torchvision.models.vgg16(pretrained=pt)
         elif cfg.MODEL.TYPE == 'squeezenet1':
-            self.model = torchvision.models.squeezenet1_0()
+            self.model = torchvision.models.squeezenet1_0(pretrained=pt)
         elif cfg.MODEL.TYPE == 'densenet161':
-            self.model = torchvision.models.densenet161()
+            self.model = torchvision.models.densenet161(pretrained=pt)
         elif cfg.MODEL.TYPE == 'inceptionv3':
-            self.model = torchvision.models.inception_v3()
+            self.model = torchvision.models.inception_v3(pretrained=pt)
         elif cfg.MODEL.TYPE == 'googlenet':
-            self.model = torchvision.models.googlenet()
+            self.model = torchvision.models.googlenet(pretrained=pt)
+        elif cfg.MODEL.TYPE == 'shufflenet':
+            self.model = torchvision.models.shufflenet_v2_x1_0(pretrained=pt)
+        elif cfg.MODEL.TYPE == 'mobilnetv2':
+            self.model = torchvision.models.mobilenet_v2(pretrained=pt)
+        elif cfg.MODEL.TYPE == 'resnext5032x4d':
+            self.model = torchvision.models.resnext50_32x4d(pretrained=pt)
+        elif cfg.MODEL.TYPE == 'wideresnet502':
+            self.model = torchvision.models.wide_resnet50_2(pretrained=pt)
+        elif cfg.MODEL.TYPE == 'mnasnet':
+            self.model = torchvision.models.mnasnet1_0(pretrained=pt)
         else:
             self.model = None
-        # shufflenet = models.shufflenet_v2_x1_0()
-        # mobilenet_v2 = models.mobilenet_v2()
-        # mobilenet_v3_large = models.mobilenet_v3_large()
-        # mobilenet_v3_small = models.mobilenet_v3_small()
-        # resnext50_32x4d = models.resnext50_32x4d()
-        # wide_resnet50_2 = models.wide_resnet50_2()
-        # mnasnet = models.mnasnet1_0()
 
-        # changing the input channels of the first layer
-        first_conv_layer = [nn.Conv2d(cfg.MODEL.IN_CHANNELS, 3, kernel_size=3, stride=1, padding=1, dilation=1,
-                                      groups=1, bias=True)]
-        first_conv_layer.extend(list(self.model.features))
-        self.model.features = nn.Sequential(*first_conv_layer)
+        new_in_channels = len(cfg.DATALOADER.SATELLITE_BANDS)
+        if new_in_channels != 3:
+            conv1_layer = self.model.conv1
 
-        # Add a avgpool here
-        self.avgpool = nn.AdaptiveAvgPool2d((7, 7))
+            # Creating new Conv2d layer
+            new_conv1_layer = nn.Conv2d(
+                in_channels=new_in_channels,
+                out_channels=conv1_layer.out_channels,
+                kernel_size=conv1_layer.kernel_size,
+                stride=conv1_layer.stride,
+                padding=conv1_layer.padding,
+                bias=conv1_layer.bias
+            )
+            # he initialization
+            nn.init.kaiming_uniform_(new_conv1_layer.weight.data, mode='fan_in', nonlinearity='relu')
 
-        # Replace the classifier layer
-        self.model.classifier[-1] = nn.Linear(4096, cfg.MODEL.OUT_CHANNELS)
+            # replace weights of first 3 channels with resnet rgb ones
+            conv1_layer_weights = conv1_layer.weight.data.clone()
+            new_conv1_layer.weight.data[:, :conv1_layer.in_channels, :, :] = conv1_layer_weights
+            self.model.conv1 = new_conv1_layer
+            # https://discuss.pytorch.org/t/how-to-change-no-of-input-channels-to-a-pretrained-model/19379/2
+            # https://discuss.pytorch.org/t/how-to-modify-the-input-channels-of-a-resnet-model/2623/10
+        num_ftrs = self.model.fc.in_features
+        self.model.fc = nn.Linear(num_ftrs, cfg.MODEL.OUT_CHANNELS)
+        self.relu = torch.nn.ReLU()
 
-
-    def forward(self, x):
-        x = self.model.features(x)
-        x = self.avgpool(x)
-        x = x.view(x.size(0), 512 * 7 * 7)
-        x = self.model.classifier(x)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.model(x)
+        x = self.relu(x)
         return x
 
 
@@ -148,7 +163,6 @@ class EMA(nn.Module):
 
     def get_model(self):
         return self.model
-
 
 
 if __name__ == '__main__':

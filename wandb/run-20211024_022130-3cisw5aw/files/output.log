@@ -1,0 +1,36 @@
+╒═══════════════════╤═══════════════════╕
+│ run config name   │                   │
+╞═══════════════════╪═══════════════════╡
+│ CONFIG_NAME       │ resnet18_baseline │
+├───────────────────┼───────────────────┤
+│ device            │ cuda              │
+├───────────────────┼───────────────────┤
+│ epochs            │ 20                │
+├───────────────────┼───────────────────┤
+│ learning rate     │ 0.0001            │
+├───────────────────┼───────────────────┤
+│ batch size        │ 8                 │
+╘═══════════════════╧═══════════════════╛
+Dataset with 16053 samples across 1 sites.
+Starting epoch 1/20.
+  0%|          | 0/16053 [00:00<?, ?it/s]
+
+
+
+
+
+  6%|▌         | 945/16053 [00:22<02:12, 114.17it/s]
+  6%|▌         | 999/16053 [00:23<05:58, 41.94it/s]
+
+
+
+
+
+ 22%|██▏       | 889/4044 [00:22<00:27, 115.12it/s]
+ 25%|██▍       | 999/4044 [00:24<01:13, 41.35it/s]
+Traceback (most recent call last):
+  File "C:/Users/shafner/repos/population_mapping/train_network.py", line 149, in <module>
+    run_training(cfg)
+  File "C:/Users/shafner/repos/population_mapping/train_network.py", line 76, in run_training
+    pop_set.append(y_gts.flatten())
+AttributeError: 'Tensor' object has no attribute 'append'
