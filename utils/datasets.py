@@ -30,11 +30,6 @@ class AbstractPopulationMappingDataset(torch.utils.data.Dataset):
         img = img[:, :, self.cfg.DATALOADER.SATELLITE_BANDS]
         return np.nan_to_num(img).astype(np.float32)
 
-    def _get_pop_grid(self, city: str) -> np.ndarray:
-        file = self.root_path / 'population_data' / f'pop_{city}.tif'
-        pop_grid, _, _ = geofiles.read_tif(file)
-        return pop_grid
-
     @staticmethod
     def _get_indices(bands, selection):
         return [bands.index(band) for band in selection]
@@ -53,7 +48,7 @@ class PopulationMappingDataset(AbstractPopulationMappingDataset):
         self.include_unlabeled = include_unlabeled
 
         if cfg.DATASET.CITY_SPLIT:
-            self.cities = list(cfg.DATASET.TRAINING) if run_type == 'training' else list(cfg.DATASET.TEST)
+            self.cities = list(cfg.DATASET.TRAINING) if run_type == 'train' else list(cfg.DATASET.TEST)
         else:
             self.cities = list(cfg.DATASET.LABELED_CITIES)
         if include_unlabeled and cfg.DATALOADER.INCLUDE_UNLABELED:
@@ -71,11 +66,7 @@ class PopulationMappingDataset(AbstractPopulationMappingDataset):
         self.samples = [s for s in self.samples if not math.isnan(s['population'])]
 
         if not cfg.DATASET.CITY_SPLIT:
-            thresh = 0.8
-            np.random.seed(cfg.SEED)
-            rand = np.random.rand(len(self.samples))
-            include_samples = rand < thresh if run_type == 'training' else rand >= thresh
-            self.samples = [s for s, include in zip(self.samples, list(include_samples)) if include]
+            self.samples = [s for s in self.samples if s[f'{run_type}_poly'] != 0]
 
         if no_augmentations:
             self.transform = transforms.Compose([augmentations.Numpy2Torch()])
@@ -89,9 +80,64 @@ class PopulationMappingDataset(AbstractPopulationMappingDataset):
         grid_cell_data = patch_data[i_start:i_start + self.grid_cell_size, j_start:j_start + self.grid_cell_size, ]
         return np.clip(grid_cell_data / self.cfg.DATALOADER.REFLECTANCE_MAX, 0, 1)
 
-    def _get_pop_data(self, city: str, i: int, j: int) -> float:
-        pop_grid = self._get_pop_grid(city)
-        return float(pop_grid[i, j, 0]) / self.cfg.DATALOADER.POP_GRIDCELL_MAX
+    def __getitem__(self, index):
+
+        sample = self.samples[index]
+
+        city = sample['city']
+        patch_id = sample['patch_id']
+        i, j = sample['i'], sample['j']
+        population = float(sample['population'])
+
+        img = self._get_vhr_data(city, patch_id, i, j)
+
+        img = self.transform(img)
+
+        item = {
+            'x': img,
+            'y': torch.tensor([population]),
+            'patch_id': patch_id,
+            'i': i,
+            'j': j,
+            'train_poly': sample['train_poly'],
+            'test_poly': sample['test_poly'],
+            'valid_for_assessment': sample['valid_for_assessment'],
+        }
+
+        return item
+
+    def __len__(self):
+        return self.length
+
+    def __str__(self):
+        return f'Dataset with {self.length} samples across {len(self.cities)} sites.'
+
+
+# dataset for urban extraction with building footprints
+class CensusDataset(AbstractPopulationMappingDataset):
+
+    def __init__(self, cfg, city: str, run_type: str, poly_id: int):
+        super().__init__(cfg)
+
+        self.run_type = run_type
+
+        metadata_file = self.root_path / f'metadata_{city}.json'
+        metadata = geofiles.load_json(metadata_file)
+        all_samples = metadata['samples']
+        self.samples = [s for s in all_samples if not math.isnan(s['population']) and s[f'{run_type}_poly'] == poly_id]
+        self.valid_for_assessment = True if np.all([[s['valid_for_assessment'] for s in self.samples]]) else False
+        self.patch_size = metadata['patch_size']
+        self.grid_cell_size = metadata['grid_cell_size']
+
+        self.transform = transforms.Compose([augmentations.Numpy2Torch()])
+
+        self.length = len(self.samples)
+
+    def _get_vhr_data(self, city: str, patch_id: str, i_start: int, j_start: int) -> np.ndarray:
+        patch_data = self._get_vhr_patch(city, patch_id)
+        grid_cell_data = patch_data[i_start:i_start + self.grid_cell_size, j_start:j_start + self.grid_cell_size, ]
+        return np.clip(grid_cell_data / self.cfg.DATALOADER.REFLECTANCE_MAX, 0, 1)
+
 
     def __getitem__(self, index):
 
@@ -104,7 +150,6 @@ class PopulationMappingDataset(AbstractPopulationMappingDataset):
 
         img = self._get_vhr_data(city, patch_id, i, j)
 
-        # pop = self._get_population_data(city, patch_id)
         img = self.transform(img)
 
         item = {
@@ -113,6 +158,9 @@ class PopulationMappingDataset(AbstractPopulationMappingDataset):
             'patch_id': patch_id,
             'i': i,
             'j': j,
+            'train_poly': sample['train_poly'],
+            'test_poly': sample['test_poly'],
+            'valid_for_assessment': sample['valid_for_assessment'],
         }
 
         return item

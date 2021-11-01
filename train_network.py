@@ -33,7 +33,7 @@ def run_training(cfg):
     criterion = loss_functions.get_criterion(cfg.MODEL.LOSS_TYPE)
 
     # reset the generators
-    dataset = datasets.PopulationMappingDataset(cfg=cfg, run_type='training')
+    dataset = datasets.PopulationMappingDataset(cfg=cfg, run_type='train')
     print(dataset)
 
     dataloader_kwargs = {
@@ -82,7 +82,7 @@ def run_training(cfg):
                 print(f'Logging step {global_step} (epoch {epoch_float:.2f}).')
 
                 # evaluation on sample of training and validation set
-                evaluation.model_evaluation(net, cfg, 'training', epoch_float, global_step, max_samples=1_000)
+                evaluation.model_evaluation(net, cfg, 'train', epoch_float, global_step, max_samples=1_000)
                 evaluation.model_evaluation(net, cfg, 'test', epoch_float, global_step, max_samples=1_000)
 
                 # logging
@@ -104,7 +104,7 @@ def run_training(cfg):
 
             if cfg.DEBUG:
                 # testing evaluation
-                evaluation.model_evaluation(net, cfg, 'training', epoch_float, global_step, max_samples=1_000)
+                evaluation.model_evaluation(net, cfg, 'train', epoch_float, global_step, max_samples=1_000)
                 evaluation.model_evaluation(net, cfg, 'test', epoch_float, global_step, max_samples=1_000)
                 break
             # end of batch
@@ -118,7 +118,7 @@ def run_training(cfg):
             networks.save_checkpoint(net, optimizer, epoch, global_step, cfg)
 
             # logs to load network
-            evaluation.model_evaluation(net, cfg, 'training', epoch_float, global_step)
+            evaluation.model_evaluation(net, cfg, 'train', epoch_float, global_step)
             evaluation.model_evaluation(net, cfg, 'test', epoch_float, global_step)
 
 

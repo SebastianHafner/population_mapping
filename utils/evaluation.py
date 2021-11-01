@@ -54,7 +54,6 @@ def inference_loop(net: networks.CustomNet, cfg: experiment_manager.CfgNode, dat
 
             pred = net(img)
 
-            # pop_scale_factor = cfg.DATALOADER.POP_GRIDCELL_MAX
             callback(img, label, pred)
 
             counter += 1

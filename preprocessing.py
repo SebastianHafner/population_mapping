@@ -1,11 +1,12 @@
 import numpy as np
 from pathlib import Path
 from affine import Affine
+import geopandas as gpd
 from tqdm import tqdm
 from utils import geofiles, paths
 
 
-def preprocess_satellite_data(city: str, patch_size: int):
+def run_preprocessing(city: str, patch_size: int):
     dirs = paths.load_paths()
     output_dir = Path(dirs.DATASET) / 'satellite_data' / city
     output_dir.mkdir(exist_ok=True)
@@ -15,10 +16,6 @@ def preprocess_satellite_data(city: str, patch_size: int):
     arr_pop, transform_pop, crs_pop = geofiles.read_tif(pop_file)
     height_pop, width_pop, _ = arr_pop.shape
     x_res_pop, _, x_min_pop, _, y_res_pop, y_max_pop, *_ = transform_pop
-
-    pop_file_out = Path(dirs.DATASET) / 'population_data' / f'pop_{city}.tif'
-    pop_file_out.parent.mkdir(exist_ok=True)
-    geofiles.write_tif(pop_file_out, arr_pop, transform_pop, crs_pop)
 
     sat_file = Path(dirs.RAW_DATA) / f'vhr_{city}.tif'
     arr_sat, transform_sat, crs_sat = geofiles.read_tif(sat_file)
@@ -32,9 +29,6 @@ def preprocess_satellite_data(city: str, patch_size: int):
     j_end_sat = int(j_start_sat + (width_pop * x_res_pop / x_res_sat))
 
     arr_sat = arr_sat[i_start_sat:i_end_sat, j_start_sat:j_end_sat, ]
-    # transform_sat = Affine(x_res_sat, 0, x_min_pop, 0, y_res_sat, y_max_pop)
-    # test_file = Path(paths.OUTPUT) / f'vhr_{city}.tif'
-    # geofiles.write_tif(test_file, arr_sat, transform_sat, crs_sat)
     height_sat, width_sat, _ = arr_sat.shape
     n_rows, n_cols = height_sat // patch_size, width_sat // patch_size
 
@@ -46,7 +40,15 @@ def preprocess_satellite_data(city: str, patch_size: int):
         'samples': [],  # list with all the samples
     }
 
+    train_file = Path(dirs.RAW_DATA) / f'train_polygons_{city}.tif'
+    train_area, _, _ = geofiles.read_tif(train_file)
+    test_file = Path(dirs.RAW_DATA) / f'test_polygons_{city}.tif'
+    test_area, _, _ = geofiles.read_tif(test_file)
+    assessment_file = Path(dirs.RAW_DATA) / f'valid_polygons_{city}.tif'
+    assessment_area, _, _ = geofiles.read_tif(assessment_file)
+
     # earth engine output is row col
+    # loop over patches
     for i in tqdm(range(n_rows)):
         for j in range(n_cols):
             i_start, i_end = i * patch_size, (i + 1) * patch_size
@@ -61,6 +63,7 @@ def preprocess_satellite_data(city: str, patch_size: int):
             file = output_dir / f'vhr_{city}_{patch_id}.tif'
             geofiles.write_tif(file, arr_patch, transform_patch, crs_sat)
 
+            # loop over grid of a patch
             for i_grid in range(grids_per_patch):
                 for j_grid in range(grids_per_patch):
                     i_pop = i * grids_per_patch + i_grid
@@ -69,7 +72,10 @@ def preprocess_satellite_data(city: str, patch_size: int):
                     # each pop grid cell is a sample
                     metadata['samples'].append({
                         'city': city,
-                        'population': arr_pop[i_pop, j_pop, 0],
+                        'population': float(arr_pop[i_pop, j_pop, 0]),
+                        'train_poly': int(train_area[i_pop, j_pop, 0]),
+                        'test_poly': int(test_area[i_pop, j_pop, 0]),
+                        'valid_for_assessment': int(assessment_area[i_pop, j_pop, 0]),
                         'patch_id': patch_id,
                         'i': i_grid * grid_cell_size,
                         'j': j_grid * grid_cell_size,
@@ -79,9 +85,20 @@ def preprocess_satellite_data(city: str, patch_size: int):
     geofiles.write_json(metadata_file, metadata)
 
 
+def create_census_geojson(city: str, run_type: str):
+    dirs = paths.load_paths()
+    file = Path(dirs.RAW_DATA) / f'{run_type}ing_polygons.shp'
+    gdf = gpd.read_file(file)
+    gdf['poly_id'] = gdf['cluster'] + 1
+    gdf = gdf[['POPULATION', 'poly_id', 'geometry']]
+    out_file = Path(dirs.DATASET) / 'census_data' / f'{run_type}_polygons_{city}.geojson'
+    gdf.to_file(out_file, driver='GeoJSON')
+
+
+
 if __name__ == '__main__':
-    # preprocess_satellite_data('dakar', 2048)
-    # preprocess_population_data('dakar')
-    preprocess_satellite_data('dakar', 1000)
+    # run_preprocessing('dakar', 1000)
+    for rt in ['train', 'test']:
+        create_census_geojson('dakar', rt)
 
 
