@@ -81,6 +81,10 @@ class CustomNet(nn.Module):
             self.model = torchvision.models.wide_resnet50_2(pretrained=pt)
         elif cfg.MODEL.TYPE == 'mnasnet':
             self.model = torchvision.models.mnasnet1_0(pretrained=pt)
+        elif cfg.MODEL.TYPE == 'efficientnetb4':
+            self.model = torchvision.models.efficientnet_b4(pretrained=pt)
+        elif cfg.MODEL.TYPE == 'wideresnet50':
+            self.model = torchvision.models.wide_resnet50_2(pretrained=pt)
         else:
             self.model = None
 

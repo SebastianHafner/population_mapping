@@ -3,7 +3,7 @@ from torch.utils import data as torch_data
 import numpy as np
 import wandb
 from tqdm import tqdm
-from utils import datasets, metrics, experiment_manager, networks
+from utils import datasets,  experiment_manager, networks
 
 
 def model_evaluation(net: networks.CustomNet, cfg: experiment_manager.CfgNode, run_type: str, epoch: float, step: int,

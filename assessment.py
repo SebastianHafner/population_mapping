@@ -3,32 +3,43 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from scipy import stats
-from utils import datasets, experiment_manager, networks, metrics
+from utils import datasets, experiment_manager, networks, evaluation
 FONTSIZE = 16
 
 
-def qualitative_assessment(config_name: str, run_type: str = 'test', n_samples: int = 5, scale_factor: float = 0.3):
+def qualitative_assessment(config_name: str, run_type: str = 'test', n_samples: int = 30, scale_factor: float = 0.3):
     cfg = experiment_manager.load_cfg(config_name)
     ds = datasets.PopulationMappingDataset(cfg, run_type, no_augmentations=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     net, *_ = networks.load_checkpoint(cfg.INFERENCE_CHECKPOINT, cfg, device)
     net.eval()
 
+    plot_size = 3
+    n_cols = 5
+    n_rows = n_samples // n_cols
+    if n_samples % n_cols != 0:
+        n_rows += 1
+
+    fig, axs = plt.subplots(n_rows, n_cols, figsize=(n_cols*plot_size, n_rows*plot_size))
+
     indices = np.random.randint(0, len(ds), n_samples)
-    for index in indices:
-        item = ds.__getitem__(index)
+    for index, item_index in enumerate(tqdm(indices)):
+        item = ds.__getitem__(item_index)
         x = item['x']
         pred_pop = net(x.to(device).unsqueeze(0)).flatten().cpu().item()
         pop = item['y'].item()
 
-        fig, ax = plt.subplots(1, 1)
         img = x.cpu().numpy().transpose((1, 2, 0))
         img = np.clip(img / scale_factor, 0, 1)
+
+        i = index // n_cols
+        j = index % n_cols
+        ax = axs[i, j] if n_rows > 1 else axs[index]
         ax.imshow(img)
-        ax.set_title(f'Pop: {pop:.0f}, Pred: {pred_pop:.0f}')
+        ax.set_title(f'Pred: {pred_pop: .0f} - Pop: {pop:.0f}')
         ax.set_axis_off()
-        plt.show()
-        plt.close(fig)
+    plt.show()
+    plt.close(fig)
 
 
 def visualize_outliers(config_name: str, run_type: str = 'test'):
@@ -102,22 +113,23 @@ def quantitative_assessment(config_name: str, run_type: str = 'test'):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     net, *_ = networks.load_checkpoint(cfg.INFERENCE_CHECKPOINT, cfg, device)
     net.eval()
-    measurer = metrics.
+    measurer = evaluation.RegressionEvaluation()
 
-    preds, gts = [], []
     for i, index in enumerate(tqdm(range(len(ds)))):
         item = ds.__getitem__(index)
         x = item['x']
-        pred_pop = net(x.to(device).unsqueeze(0)).flatten().cpu().item()
-        preds.append(pred_pop)
-        pop = item['y'].item()
-        gts.append(pop)
+        pred_pop = net(x.to(device).unsqueeze(0)).flatten().cpu()
+        pop = item['y'].cpu()
+        measurer.add_sample(pred_pop, pop)
+
         if i == 100:
             pass
-    pass
+    rmse = measurer.root_mean_square_error()
+    print(f'RMSE: {rmse:.2f}')
 
 
 if __name__ == '__main__':
     config = 'resnet18_baseline'
-    # qualitative_assessment(config)
-    correlation(config, add_lin_regression=True, scale='linear')
+    qualitative_assessment(config)
+    # correlation(config, add_lin_regression=True, scale='linear')
+    # quantitative_assessment(config)

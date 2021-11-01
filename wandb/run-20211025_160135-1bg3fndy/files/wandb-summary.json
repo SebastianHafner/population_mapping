@@ -1,0 +1,1 @@
+{"training rmse": 70.89835153231702, "step": 20060, "epoch": 20.0, "_runtime": 17901, "_timestamp": 1635188396, "_step": 607, "test rmse": 75.89332974642765, "loss": 3249.5440197753906, "labeled_percentage": 100, "mean_population": 134.8599395751953, "null_percentage": 14.0, "time": 79.61963970000215, "_wandb": {"runtime": 17899}}
