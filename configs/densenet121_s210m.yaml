@@ -1,0 +1,15 @@
+_BASE_: "base.yaml"
+DEBUG: True
+INFERENCE_CHECKPOINT: 20
+
+MODEL:
+  TYPE: 'densenet'
+  SIZE: 121
+  IN_CHANNELS: 4
+
+DATALOADER:
+  FEATURES: ['s2']
+  NUM_WORKER: 8
+  SHUFFLE: True
+  S2_BAND_INDICES: [2, 1, 0, 6]
+

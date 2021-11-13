@@ -1,0 +1,10 @@
+_BASE_: "base.yaml"
+DEBUG: False
+INFERENCE_CHECKPOINT: 20
+
+DATALOADER:
+  FEATURES: ['s2']
+  NUM_WORKER: 8
+  SHUFFLE: True
+  S2_BAND_INDICES: [2, 1, 0]
+

@@ -26,14 +26,14 @@ def run_training(cfg):
              }
     print(tabulate(table, headers='keys', tablefmt="fancy_grid", ))
 
-    net = networks.CustomNet(cfg)
+    net = networks.PopulationNet(cfg)
     net.to(device)
     optimizer = optim.AdamW(net.parameters(), lr=cfg.TRAINER.LR, weight_decay=0.01)
 
     criterion = loss_functions.get_criterion(cfg.MODEL.LOSS_TYPE)
 
     # reset the generators
-    dataset = datasets.PopulationMappingDataset(cfg=cfg, run_type='train')
+    dataset = datasets.CellPopulationDataset(cfg=cfg, run_type='train')
     print(dataset)
 
     dataloader_kwargs = {

@@ -6,12 +6,12 @@ from tqdm import tqdm
 from utils import datasets,  experiment_manager, networks
 
 
-def model_evaluation(net: networks.CustomNet, cfg: experiment_manager.CfgNode, run_type: str, epoch: float, step: int,
+def model_evaluation(net: networks.PopulationNet, cfg: experiment_manager.CfgNode, run_type: str, epoch: float, step: int,
                      max_samples: int = 100):
 
     measurer = RegressionEvaluation()
 
-    dataset = datasets.PopulationMappingDataset(cfg, run_type, no_augmentations=True)
+    dataset = datasets.CellPopulationDataset(cfg, run_type, no_augmentations=True)
 
     def evaluation_callback(x, y, z):
         # x img y label z pred
@@ -31,7 +31,7 @@ def model_evaluation(net: networks.CustomNet, cfg: experiment_manager.CfgNode, r
         })
 
 
-def inference_loop(net: networks.CustomNet, cfg: experiment_manager.CfgNode, dataset: str, callback,
+def inference_loop(net: networks.PopulationNet, cfg: experiment_manager.CfgNode, dataset: str, callback,
                    max_samples: int = None, num_workers: int = 0):
     dataloader_kwargs = {
         'batch_size': 1,

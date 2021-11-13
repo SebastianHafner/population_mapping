@@ -5,6 +5,7 @@ from abc import abstractmethod
 import affine
 import math
 import numpy as np
+import cv2
 from utils import augmentations, geofiles, paths
 
 
@@ -16,6 +17,10 @@ class AbstractPopulationMappingDataset(torch.utils.data.Dataset):
         dirs = paths.load_paths()
         self.root_path = Path(dirs.DATASET)
 
+        self.features = cfg.DATALOADER.FEATURES
+        self.patch_size = cfg.DATALOADER.PATCH_SIZE
+        self.n_channels = cfg.MODEL.IN_CHANNELS
+
     @abstractmethod
     def __getitem__(self, index: int) -> dict:
         pass
@@ -24,26 +29,47 @@ class AbstractPopulationMappingDataset(torch.utils.data.Dataset):
     def __len__(self) -> int:
         pass
 
-    def _get_vhr_patch(self, city: str, patch_id: str) -> np.ndarray:
-        file = self.root_path / 'satellite_data' / city / f'vhr_{city}_{patch_id}.tif'
+    # generic data loading function used for different features (e.g. vhr satellite data)
+    def _get_patch_data(self, feature: str, city: str, i: int, j: int) -> np.ndarray:
+        file = self.root_path / 'features' / city / feature / f'{feature}_{city}_{i:03d}-{j:03d}.tif'
         img, _, _ = geofiles.read_tif(file)
-        img = img[:, :, self.cfg.DATALOADER.SATELLITE_BANDS]
+
+        if feature == 'vhr':
+            band_indices = self.cfg.DATALOADER.VHR_BAND_INDICES
+        elif feature == 's2':
+            band_indices = self.cfg.DATALOADER.S2_BAND_INDICES
+        else:
+            band_indices = [0]
+        img = img[:, :, band_indices]
+
+        if feature == 'vhr':
+            img = np.clip(img / self.cfg.DATALOADER.VHR_MAX_REFLECTANCE, 0, 1)
+
+        # resampling images to desired patch size
+        if img.shape[0] != self.patch_size or img.shape[1] != self.patch_size:
+                img = cv2.resize(img, (self.patch_size, self.patch_size), interpolation=cv2.INTER_NEAREST)
+
         return np.nan_to_num(img).astype(np.float32)
 
-    @staticmethod
-    def _get_indices(bands, selection):
-        return [bands.index(band) for band in selection]
+    # loading patch data for all features
+    def _get_patch_net_input(self, city: str, i: int, j: int) -> np.ndarray:
+        patch_net_input = np.empty((self.patch_size, self.patch_size, self.n_channels), dtype=np.single)
+        start_i = 0
+        for feature in self.features:
+            feature_patch_data = self._get_patch_data(feature, city, i, j)
+            feature_n_channels = feature_patch_data.shape[-1]
+            patch_net_input[:, :, start_i:start_i + feature_n_channels] = feature_patch_data
+            start_i += feature_n_channels
+        return patch_net_input
 
 
 # dataset for urban extraction with building footprints
-class PopulationMappingDataset(AbstractPopulationMappingDataset):
+class CellPopulationDataset(AbstractPopulationMappingDataset):
 
-    def __init__(self, cfg, run_type: str, include_projection: bool = False, no_augmentations: bool = False,
-                 include_unlabeled: bool = True):
+    def __init__(self, cfg, run_type: str, no_augmentations: bool = False, include_unlabeled: bool = True):
         super().__init__(cfg)
 
         self.run_type = run_type
-        self.include_projection = include_projection
         self.no_augmentations = no_augmentations
         self.include_unlabeled = include_unlabeled
 
@@ -56,11 +82,9 @@ class PopulationMappingDataset(AbstractPopulationMappingDataset):
 
         self.samples = []
         for city in self.cities:
-            metadata_file = self.root_path / f'metadata_{city}.json'
-            metadata = geofiles.load_json(metadata_file)
-            self.samples.extend(metadata['samples'])
-            self.patch_size = metadata['patch_size']
-            self.grid_cell_size = metadata['grid_cell_size']
+            city_metadata_file = self.root_path / f'metadata_{city}.json'
+            city_metadata = geofiles.load_json(city_metadata_file)
+            self.samples.extend(city_metadata['samples'])
 
         # removing nan values
         self.samples = [s for s in self.samples if not math.isnan(s['population'])]
@@ -75,28 +99,20 @@ class PopulationMappingDataset(AbstractPopulationMappingDataset):
 
         self.length = len(self.samples)
 
-    def _get_vhr_data(self, city: str, patch_id: str, i_start: int, j_start: int) -> np.ndarray:
-        patch_data = self._get_vhr_patch(city, patch_id)
-        grid_cell_data = patch_data[i_start:i_start + self.grid_cell_size, j_start:j_start + self.grid_cell_size, ]
-        return np.clip(grid_cell_data / self.cfg.DATALOADER.REFLECTANCE_MAX, 0, 1)
-
     def __getitem__(self, index):
 
         sample = self.samples[index]
 
         city = sample['city']
-        patch_id = sample['patch_id']
         i, j = sample['i'], sample['j']
         population = float(sample['population'])
 
-        img = self._get_vhr_data(city, patch_id, i, j)
-
-        img = self.transform(img)
+        patch_data = self._get_patch_net_input(city, i, j)
+        x = self.transform(patch_data)
 
         item = {
-            'x': img,
+            'x': x,
             'y': torch.tensor([population]),
-            'patch_id': patch_id,
             'i': i,
             'j': j,
             'train_poly': sample['train_poly'],
@@ -114,7 +130,7 @@ class PopulationMappingDataset(AbstractPopulationMappingDataset):
 
 
 # dataset for urban extraction with building footprints
-class CensusDataset(AbstractPopulationMappingDataset):
+class CensusPopulationDataset(AbstractPopulationMappingDataset):
 
     def __init__(self, cfg, city: str, run_type: str, poly_id: int):
         super().__init__(cfg)
@@ -126,36 +142,24 @@ class CensusDataset(AbstractPopulationMappingDataset):
         all_samples = metadata['samples']
         self.samples = [s for s in all_samples if not math.isnan(s['population']) and s[f'{run_type}_poly'] == poly_id]
         self.valid_for_assessment = True if np.all([[s['valid_for_assessment'] for s in self.samples]]) else False
-        self.patch_size = metadata['patch_size']
-        self.grid_cell_size = metadata['grid_cell_size']
 
         self.transform = transforms.Compose([augmentations.Numpy2Torch()])
 
         self.length = len(self.samples)
 
-    def _get_vhr_data(self, city: str, patch_id: str, i_start: int, j_start: int) -> np.ndarray:
-        patch_data = self._get_vhr_patch(city, patch_id)
-        grid_cell_data = patch_data[i_start:i_start + self.grid_cell_size, j_start:j_start + self.grid_cell_size, ]
-        return np.clip(grid_cell_data / self.cfg.DATALOADER.REFLECTANCE_MAX, 0, 1)
-
-
     def __getitem__(self, index):
-
         sample = self.samples[index]
 
         city = sample['city']
-        patch_id = sample['patch_id']
         i, j = sample['i'], sample['j']
         population = float(sample['population'])
 
-        img = self._get_vhr_data(city, patch_id, i, j)
-
-        img = self.transform(img)
+        patch_data = self._get_patch_net_input(city, i, j)
+        x = self.transform(patch_data)
 
         item = {
-            'x': img,
+            'x': x,
             'y': torch.tensor([population]),
-            'patch_id': patch_id,
             'i': i,
             'j': j,
             'train_poly': sample['train_poly'],

@@ -6,11 +6,10 @@ from utils import paths, experiment_manager
 from copy import deepcopy
 from collections import OrderedDict
 from sys import stderr
-import copy
 
 
 def load_network(cfg: experiment_manager.CfgNode, checkpoint: int = None):
-    net = CustomNet(cfg)
+    net = PopulationNet(cfg)
     dirs = paths.load_paths()
     checkpoint = checkpoint if checkpoint is None else cfg.INFERENCE.CHECKPOINT
     net_file = Path(dirs.OUTPUT) / f'{cfg.NAME}_{checkpoint}.pkl'
@@ -31,7 +30,7 @@ def save_checkpoint(network, optimizer, epoch, step, cfg):
 
 
 def load_checkpoint(epoch, cfg, device):
-    net = CustomNet(cfg)
+    net = PopulationNet(cfg)
     net.to(device)
 
     dirs = paths.load_paths()
@@ -51,71 +50,98 @@ def create_ema_network(net, cfg):
     return ema_net
 
 
-class CustomNet(nn.Module):
+class PopulationNet(nn.Module):
 
     def __init__(self, cfg):
-        super(CustomNet, self).__init__()
+        super(PopulationNet, self).__init__()
         self.cfg = cfg
         pt = cfg.MODEL.PRETRAINED
-        if cfg.MODEL.TYPE == 'resnet18':
-            self.model = torchvision.models.resnet18(pretrained=pt)
-        elif cfg.MODEL.TYPE == 'alexnet':
-            self.model = torchvision.models.alexnet(pretrained=pt)
-        elif cfg.MODEL.TYPE == 'vgg16':
-            self.model = torchvision.models.vgg16(pretrained=pt)
-        elif cfg.MODEL.TYPE == 'squeezenet1':
-            self.model = torchvision.models.squeezenet1_0(pretrained=pt)
-        elif cfg.MODEL.TYPE == 'densenet161':
-            self.model = torchvision.models.densenet161(pretrained=pt)
-        elif cfg.MODEL.TYPE == 'inceptionv3':
-            self.model = torchvision.models.inception_v3(pretrained=pt)
-        elif cfg.MODEL.TYPE == 'googlenet':
-            self.model = torchvision.models.googlenet(pretrained=pt)
-        elif cfg.MODEL.TYPE == 'shufflenet':
-            self.model = torchvision.models.shufflenet_v2_x1_0(pretrained=pt)
-        elif cfg.MODEL.TYPE == 'mobilnetv2':
-            self.model = torchvision.models.mobilenet_v2(pretrained=pt)
-        elif cfg.MODEL.TYPE == 'resnext5032x4d':
-            self.model = torchvision.models.resnext50_32x4d(pretrained=pt)
-        elif cfg.MODEL.TYPE == 'wideresnet502':
-            self.model = torchvision.models.wide_resnet50_2(pretrained=pt)
-        elif cfg.MODEL.TYPE == 'mnasnet':
-            self.model = torchvision.models.mnasnet1_0(pretrained=pt)
-        elif cfg.MODEL.TYPE == 'efficientnetb4':
-            self.model = torchvision.models.efficientnet_b4(pretrained=pt)
-        elif cfg.MODEL.TYPE == 'wideresnet50':
-            self.model = torchvision.models.wide_resnet50_2(pretrained=pt)
+        if cfg.MODEL.TYPE == 'resnet':
+            if cfg.MODEL.SIZE == 18:
+                self.model = torchvision.models.resnet18(pretrained=pt)
+            elif cfg.MODEL.SIZE == 50:
+                self.model = torchvision.models.resnet50(pretrained=pt)
+            else:
+                raise Exception(f'Unkown resnet size ({cfg.MODEL.SIZE}).')
+        elif cfg.MODEL.TYPE == 'densenet':
+            if cfg.MODEL.SIZE == 121:
+                self.model = torchvision.models.densenet121(pretrained=pt)
+            elif cfg.MODEL.SIZE == 161:
+                self.model = torchvision.models.densenet161(pretrained=pt)
+            else:
+                raise Exception(f'Unkown densenet size ({cfg.MODEL.SIZE}).')
         else:
-            self.model = None
+            if cfg.MODEL.TYPE == 'alexnet':
+                self.model = torchvision.models.alexnet(pretrained=pt)
+            elif cfg.MODEL.TYPE == 'vgg16':
+                self.model = torchvision.models.vgg16(pretrained=pt)
+            elif cfg.MODEL.TYPE == 'squeezenet1':
+                self.model = torchvision.models.squeezenet1_0(pretrained=pt)
+            elif cfg.MODEL.TYPE == 'inceptionv3':
+                self.model = torchvision.models.inception_v3(pretrained=pt)
+            elif cfg.MODEL.TYPE == 'googlenet':
+                self.model = torchvision.models.googlenet(pretrained=pt)
+            elif cfg.MODEL.TYPE == 'shufflenet':
+                self.model = torchvision.models.shufflenet_v2_x1_0(pretrained=pt)
+            elif cfg.MODEL.TYPE == 'mobilnetv2':
+                self.model = torchvision.models.mobilenet_v2(pretrained=pt)
+            elif cfg.MODEL.TYPE == 'resnext5032x4d':
+                self.model = torchvision.models.resnext50_32x4d(pretrained=pt)
+            elif cfg.MODEL.TYPE == 'wideresnet502':
+                self.model = torchvision.models.wide_resnet50_2(pretrained=pt)
+            elif cfg.MODEL.TYPE == 'mnasnet':
+                self.model = torchvision.models.mnasnet1_0(pretrained=pt)
+            elif cfg.MODEL.TYPE == 'efficientnetb4':
+                self.model = torchvision.models.efficientnet_b4(pretrained=pt)
+            elif cfg.MODEL.TYPE == 'wideresnet50':
+                self.model = torchvision.models.wide_resnet50_2(pretrained=pt)
+            else:
+                raise Exception(f'Unkown network ({cfg.MODEL.TYPE}).')
 
-        new_in_channels = len(cfg.DATALOADER.SATELLITE_BANDS)
+        new_in_channels = cfg.MODEL.IN_CHANNELS
         if new_in_channels != 3:
-            conv1_layer = self.model.conv1
+            # only implemented for resnet and densenet
+            assert(cfg.MODEL.TYPE == 'resnet' or cfg.MODEL.TYPE == 'densenet')
 
+            # if cfg.MODEL.TYPE == 'resnet':
+            first_layer = self.model.conv1 if cfg.MODEL.TYPE == 'resnet' else self.model.features.conv0
             # Creating new Conv2d layer
-            new_conv1_layer = nn.Conv2d(
+            new_first_layer = nn.Conv2d(
                 in_channels=new_in_channels,
-                out_channels=conv1_layer.out_channels,
-                kernel_size=conv1_layer.kernel_size,
-                stride=conv1_layer.stride,
-                padding=conv1_layer.padding,
-                bias=conv1_layer.bias
+                out_channels=first_layer.out_channels,
+                kernel_size=first_layer.kernel_size,
+                stride=first_layer.stride,
+                padding=first_layer.padding,
+                bias=first_layer.bias
             )
             # he initialization
-            nn.init.kaiming_uniform_(new_conv1_layer.weight.data, mode='fan_in', nonlinearity='relu')
+            nn.init.kaiming_uniform_(new_first_layer.weight.data, mode='fan_in', nonlinearity='relu')
+            if new_in_channels > 3:
 
-            # replace weights of first 3 channels with resnet rgb ones
-            conv1_layer_weights = conv1_layer.weight.data.clone()
-            new_conv1_layer.weight.data[:, :conv1_layer.in_channels, :, :] = conv1_layer_weights
-            self.model.conv1 = new_conv1_layer
-            # https://discuss.pytorch.org/t/how-to-change-no-of-input-channels-to-a-pretrained-model/19379/2
-            # https://discuss.pytorch.org/t/how-to-modify-the-input-channels-of-a-resnet-model/2623/10
-        num_ftrs = self.model.fc.in_features
-        self.model.fc = nn.Linear(num_ftrs, cfg.MODEL.OUT_CHANNELS)
+                # replace weights of first 3 channels with resnet rgb ones
+                first_layer_weights = first_layer.weight.data.clone()
+                new_first_layer.weight.data[:, :first_layer.in_channels, :, :] = first_layer_weights
+
+            if cfg.MODEL.TYPE == 'resnet':
+                # replacing first layer
+                self.model.conv1 = new_first_layer
+                # replacing fully connected layer
+                num_ftrs = self.model.fc.in_features
+                self.model.fc = nn.Linear(num_ftrs, cfg.MODEL.OUT_CHANNELS)
+                # https://discuss.pytorch.org/t/how-to-change-no-of-input-channels-to-a-pretrained-model/19379/2
+                # https://discuss.pytorch.org/t/how-to-modify-the-input-channels-of-a-resnet-model/2623/10
+            else:
+                # replacing first layer
+                self.model.features.conv0 = new_first_layer
+                # adding fully connected layer
+                self.fc = nn.Linear(1_000, cfg.MODEL.OUT_CHANNELS)
+
         self.relu = torch.nn.ReLU()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.model(x)
+        if self.cfg.MODEL.TYPE == 'densenet':
+            x = self.fc(x)
         x = self.relu(x)
         return x
 

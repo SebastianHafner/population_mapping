@@ -8,9 +8,6 @@ import cv2
 def compose_transformations(cfg):
     transformations = []
 
-    if cfg.AUGMENTATION.DOWNSAMPLING != 1:
-       transformations.append(DownSampling(cfg.AUGMENTATION.DOWNSAMPLING))
-
     if cfg.AUGMENTATION.RANDOM_FLIP:
         transformations.append(RandomFlip())
 
