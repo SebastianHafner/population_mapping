@@ -8,6 +8,7 @@ from utils import paths, datasets, experiment_manager, networks, evaluation, geo
 from pathlib import Path
 import math
 FONTSIZE = 16
+# TODO: add support for pop log
 
 
 def qualitative_assessment_celllevel(config_name: str, run_type: str = 'test', n_samples: int = 30, scale_factor: float = 0.3):

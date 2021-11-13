@@ -1,7 +1,0 @@
-_BASE_: "base.yaml"
-DEBUG: False
-INFERENCE_CHECKPOINT: 20
-
-MODEL:
-  TYPE: 'wideresnet50'
-  PRETRAINED: True

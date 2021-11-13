@@ -1,5 +1,5 @@
 _BASE_: "base.yaml"
-DEBUG: False
+DEBUG: True
 INFERENCE_CHECKPOINT: 20
 
 MODEL:
@@ -8,4 +8,4 @@ MODEL:
 DATALOADER:
   FEATURES: ['s2']
   S2_BAND_INDICES: [2, 1, 0, 6]
-
+  LOG_POP: True

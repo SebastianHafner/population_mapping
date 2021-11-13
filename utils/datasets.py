@@ -62,6 +62,13 @@ class AbstractPopulationMappingDataset(torch.utils.data.Dataset):
             start_i += feature_n_channels
         return patch_net_input
 
+    @staticmethod
+    def pop_log_conversion(pop: float) -> float:
+        if pop == 0:
+            return 0
+        else:
+            return math.log10(pop)
+
 
 # dataset for urban extraction with building footprints
 class CellPopulationDataset(AbstractPopulationMappingDataset):
@@ -105,7 +112,10 @@ class CellPopulationDataset(AbstractPopulationMappingDataset):
 
         city = sample['city']
         i, j = sample['i'], sample['j']
-        population = float(sample['population'])
+        if self.cfg.DATALOADER.LOG_POP:
+            population = self.pop_log_conversion(float(sample['population']))
+        else:
+            population = float(sample['population'])
 
         patch_data = self._get_patch_net_input(city, i, j)
         x = self.transform(patch_data)
