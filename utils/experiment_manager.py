@@ -10,10 +10,12 @@ from utils import paths
 
 
 def default_argument_parser():
-
+    # https://docs.python.org/3/library/argparse.html#the-add-argument-method
     parser = argparse.ArgumentParser(description="Experiment Args")
-    parser.add_argument('-c', "--config-file", dest='config_file', default="", required=True, metavar="FILE",
-                        help="path to config file")
+    parser.add_argument('-c', "--config-file", dest='config_file', required=True, help="path to config file")
+    parser.add_argument('-o', "--output-dir", dest='output_dir', required=True, help="path to output directory")
+    parser.add_argument('-d', "--dataset-dir", dest='dataset_dir', default="", required=True,
+                        help="path to output directory")
 
     parser.add_argument(
         "opts",
@@ -64,20 +66,14 @@ def new_config():
 
     # TRAINER SETTINGS
     C.TRAINER = CfgNode()
-    C.TRAINER.LR = 0.001
-    C.TRAINER.BATCH_SIZE = 1
-    C.TRAINER.CHECKPOINT_PERIOD = 5000
-    C.TRAINER.EPOCHS = 1
 
     # DATALOADER SETTINGS
     C.DATALOADER = CfgNode()
-    C.DATALOADER.NUM_WORKER = 1
-    C.DATALOADER.SHUFFLE = True
+
 
     # DATASET SETTINGS
     C.DATASETS = CfgNode()
-    C.DATASETS.TRAIN = ()
-    C.DATASETS.TEST = ()
+
 
     # Model configs
     C.MODEL = CfgNode()
@@ -104,4 +100,6 @@ def setup_cfg(args):
     cfg.merge_from_file(f'configs/{args.config_file}.yaml')
     cfg.merge_from_list(args.opts)
     cfg.NAME = args.config_file
+    cfg.PATHS.OUTPUT = args.output_dir
+    cfg.PATHS.DATASET = args.dataset_dir
     return cfg
