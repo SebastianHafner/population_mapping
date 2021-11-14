@@ -1,12 +1,6 @@
 import argparse
-import logging
-from argparse import ArgumentParser
-from tabulate import tabulate
-from collections import OrderedDict
-import yaml
 from fvcore.common.config import CfgNode as _CfgNode
 from pathlib import Path
-from utils import paths
 
 
 def default_argument_parser():
@@ -62,37 +56,15 @@ def new_config():
     C = CfgNode()
 
     C.CONFIG_DIR = 'config/'
-    C.OUTPUT_BASE_DIR = 'output/'
 
-    # TRAINER SETTINGS
+    C.PATHS = CfgNode()
     C.TRAINER = CfgNode()
-
-    # DATALOADER SETTINGS
-    C.DATALOADER = CfgNode()
-
-
-    # DATASET SETTINGS
-    C.DATASETS = CfgNode()
-
-
-    # Model configs
     C.MODEL = CfgNode()
-    C.MODEL.BINARY_CLASSIFICATION = False
-    C.MODEL.OUT_CHANNELS = 1
-    C.MODEL.IN_CHANNELS = 3
+    C.DATALOADER = CfgNode()
+    C.DATASETS = CfgNode()
+    C.AUGMENTATIONS = CfgNode()
 
-    C.MAX_EPOCHS = 1
     return C.clone()
-
-
-# loading cfg
-def load_cfg(config_name: str):
-    cfg = new_config()
-    dirs = paths.load_paths()
-    cfg_file = Path(dirs.HOME) / 'configs' / f'{config_name}.yaml'
-    cfg.merge_from_file(str(cfg_file))
-    cfg.NAME = config_name
-    return cfg
 
 
 def setup_cfg(args):
@@ -100,6 +72,18 @@ def setup_cfg(args):
     cfg.merge_from_file(f'configs/{args.config_file}.yaml')
     cfg.merge_from_list(args.opts)
     cfg.NAME = args.config_file
+    cfg.PATHS.ROOT = str(Path.cwd())
     cfg.PATHS.OUTPUT = args.output_dir
     cfg.PATHS.DATASET = args.dataset_dir
     return cfg
+
+
+def load_cfg(config_name: str):
+    cfg = new_config()
+    cfg_file = Path.cwd() / 'configs' / f'{config_name}.yaml'
+    cfg.merge_from_file(str(cfg_file))
+    cfg.NAME = config_name
+    return cfg
+
+
+
