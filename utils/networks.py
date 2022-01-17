@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torchvision
 from pathlib import Path
-from utils import paths, experiment_manager
+from utils import experiment_manager
 from copy import deepcopy
 from collections import OrderedDict
 from sys import stderr

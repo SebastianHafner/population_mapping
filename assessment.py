@@ -6,19 +6,18 @@ from tqdm import tqdm
 from scipy import stats
 from utils import paths, datasets, experiment_manager, networks, evaluation, geofiles
 from pathlib import Path
-import math
+import argparse
 FONTSIZE = 16
 # TODO: add support for pop log
 
 
-def qualitative_assessment_celllevel(config_name: str, run_type: str = 'test', n_samples: int = 30, scale_factor: float = 0.3):
-    cfg = experiment_manager.load_cfg(config_name)
+def qualitative_assessment_celllevel(cfg: str, run_type: str = 'test', n_samples: int = 30, scale_factor: float = 0.3):
     ds = datasets.CellPopulationDataset(cfg, run_type, no_augmentations=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     net, *_ = networks.load_checkpoint(cfg.INFERENCE_CHECKPOINT, cfg, device)
     net.eval()
 
-    plot_size = 3
+    plot_size = 2
     n_cols = 5
     n_rows = n_samples // n_cols
     if n_samples % n_cols != 0:
@@ -34,6 +33,7 @@ def qualitative_assessment_celllevel(config_name: str, run_type: str = 'test', n
         pop = item['y'].item()
 
         img = x.cpu().numpy().transpose((1, 2, 0))
+        img = img[:, :, :3] if img.shape[-1] > 3 else img
         img = np.clip(img / scale_factor, 0, 1)
 
         i = index // n_cols
@@ -42,8 +42,8 @@ def qualitative_assessment_celllevel(config_name: str, run_type: str = 'test', n
         ax.imshow(img)
         ax.set_title(f'Pred: {pred_pop: .0f} - Pop: {pop:.0f}')
         ax.set_axis_off()
-    dirs = paths.load_paths()
-    out_file = Path(dirs.OUTPUT) / 'plots' / f'dakar_qualitative_assessment_{config_name}.png'
+    out_file = Path(cfg.PATHS.OUTPUT) / 'plots' / f'dakar_qualitative_assessment_{cfg.NAME}.png'
+    plt.tight_layout()
     plt.savefig(out_file, dpi=300, bbox_inches='tight')
     plt.show()
     plt.close(fig)
@@ -237,15 +237,36 @@ def produce_error_grid(config_name: str, city: str, run_type: str = 'test'):
     geofiles.write_tif(out_file, error, transform, crs)
 
 
+def assessment_argument_parser():
+    # https://docs.python.org/3/library/argparse.html#the-add-argument-method
+    parser = argparse.ArgumentParser(description="Experiment Args")
+
+    parser.add_argument('-c', "--config-file", dest='config_file', required=True, help="path to config file")
+    parser.add_argument('-o', "--output-dir", dest='output_dir', required=True, help="path to output directory")
+    parser.add_argument('-d', "--dataset-dir", dest='dataset_dir', default="", required=True,
+                        help="path to output directory")
+    parser.add_argument('-r', "--run-type", dest='run_type', default="validation", required=False, help="run type")
+
+    parser.add_argument(
+        "opts",
+        help="Modify config options using the command-line",
+        default=None,
+        nargs=argparse.REMAINDER,
+    )
+    return parser
+
+
 if __name__ == '__main__':
-    config = 'resnet18_vhr'
-    # qualitative_assessment_celllevel(config)
+    args = experiment_manager.default_argument_parser().parse_known_args()[0]
+    cfg = experiment_manager.setup_cfg(args)
+    qualitative_assessment_celllevel(cfg)
+
+    # quantitative_assessment(cfg)
     # produce_error_grid(config, 'dakar')
     # run_quantitative_assessment_censuslevel(config, 'dakar')
-    configs = ['resnet18_bf', 'resnet18_vhr', 'resnet18_vhr4bands', 'resnet18_s2rgb', 'resnet18_s2fc',
-               'resnet18_s210m', 'resnet18_s210m_plusbf']
-    for config in configs:
-        # correlation_celllevel(config, 'dakar')
-        correlation_censuslevel(config, 'dakar')
-        # produce_error_grid(config, 'dakar')
-    # quantitative_assessment(config)
+
+
+    # correlation_celllevel(config, 'dakar')
+    # correlation_censuslevel(config, 'dakar')
+    # produce_error_grid(config, 'dakar')
+

@@ -73,7 +73,9 @@ def setup_cfg(args):
     cfg.merge_from_list(args.opts)
     cfg.NAME = args.config_file
     cfg.PATHS.ROOT = str(Path.cwd())
+    assert(Path(args.output_dir).exists())
     cfg.PATHS.OUTPUT = args.output_dir
+    assert(Path(args.dataset_dir).exists())
     cfg.PATHS.DATASET = args.dataset_dir
     return cfg
 
