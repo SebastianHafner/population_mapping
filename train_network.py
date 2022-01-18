@@ -137,13 +137,13 @@ if __name__ == '__main__':
 
     print('=== Runnning on device: p', device)
 
-    if not cfg.DEBUG:
-        wandb.init(
-            name=cfg.NAME,
-            config=cfg,
-            entity='population_mapping',
-            tags=['run', 'population', 'mapping', 'regression', ],
-        )
+    wandb.init(
+        name=cfg.NAME,
+        config=cfg,
+        entity='population_mapping',
+        tags=['run', 'population', 'mapping', 'regression', ],
+        mode='online' if not cfg.DEBUG else 'disabled',
+    )
 
     try:
         run_training(cfg)

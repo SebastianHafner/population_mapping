@@ -80,24 +80,16 @@ class CellPopulationDataset(AbstractPopulationMappingDataset):
         self.no_augmentations = no_augmentations
         self.include_unlabeled = include_unlabeled
 
-        if cfg.DATASET.CITY_SPLIT:
-            self.cities = list(cfg.DATASET.TRAINING) if run_type == 'train' else list(cfg.DATASET.TEST)
-        else:
-            self.cities = list(cfg.DATASET.LABELED_CITIES)
-        if include_unlabeled and cfg.DATALOADER.INCLUDE_UNLABELED:
-            self.cities += cfg.DATASET.UNLABELED_CITIES
+        self.cities = list(cfg.DATASET.LABELED_CITIES)
+        if cfg.DATALOADER.INCLUDE_UNLABELED:
+            self.cities.extend(list(cfg.DATASET.UNLABELED_CITIES))
 
         self.samples = []
         for city in self.cities:
             city_metadata_file = self.root_path / f'metadata_{city}.json'
             city_metadata = geofiles.load_json(city_metadata_file)
             self.samples.extend(city_metadata['samples'])
-
-        # removing nan values
-        self.samples = [s for s in self.samples if not math.isnan(s['population'])]
-
-        if not cfg.DATASET.CITY_SPLIT:
-            self.samples = [s for s in self.samples if s[f'{run_type}_poly'] != 0]
+        self.samples = [s for s in self.samples if s['split'] == run_type]
 
         if no_augmentations:
             self.transform = transforms.Compose([augmentations.Numpy2Torch()])
@@ -125,9 +117,7 @@ class CellPopulationDataset(AbstractPopulationMappingDataset):
             'y': torch.tensor([population]),
             'i': i,
             'j': j,
-            'train_poly': sample['train_poly'],
-            'test_poly': sample['test_poly'],
-            'valid_for_assessment': sample['valid_for_assessment'],
+            'is_labeled': True if city in self.cfg.DATASET.LABELED_CITIES else False
         }
 
         return item

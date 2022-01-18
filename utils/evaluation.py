@@ -23,12 +23,11 @@ def model_evaluation(net: networks.PopulationNet, cfg: experiment_manager.CfgNod
     # assessment
     rmse = measurer.root_mean_square_error()
     print(f'RMSE {run_type} {rmse:.3f}')
-    if not cfg.DEBUG:
-        wandb.log({
-            f'{run_type} rmse': rmse,
-            'step': step,
-            'epoch': epoch,
-        })
+    wandb.log({
+        f'{run_type} rmse': rmse,
+        'step': step,
+        'epoch': epoch,
+    })
 
 
 def inference_loop(net: networks.PopulationNet, cfg: experiment_manager.CfgNode, dataset: str, callback,
