@@ -87,12 +87,12 @@ class PopulationNet(nn.Module):
                 raise Exception(f'Unkown network ({cfg.MODEL.TYPE}).')
 
         new_in_channels = cfg.MODEL.IN_CHANNELS
-        if new_in_channels != 3:
-            # only implemented for resnet and densenet
-            assert(cfg.MODEL.TYPE == 'resnet' or cfg.MODEL.TYPE == 'densenet')
 
-            # if cfg.MODEL.TYPE == 'resnet':
-            first_layer = self.model.conv1 if cfg.MODEL.TYPE == 'resnet' else self.model.features.conv0
+        if new_in_channels != 3:
+            # only implemented for resnet
+            assert(cfg.MODEL.TYPE == 'resnet')
+
+            first_layer = self.model.conv1
             # Creating new Conv2d layer
             new_first_layer = nn.Conv2d(
                 in_channels=new_in_channels,
@@ -105,31 +105,24 @@ class PopulationNet(nn.Module):
             # he initialization
             nn.init.kaiming_uniform_(new_first_layer.weight.data, mode='fan_in', nonlinearity='relu')
             if new_in_channels > 3:
-
                 # replace weights of first 3 channels with resnet rgb ones
                 first_layer_weights = first_layer.weight.data.clone()
                 new_first_layer.weight.data[:, :first_layer.in_channels, :, :] = first_layer_weights
+            # if it is less than 3 channels we use he initialization (no pretraining)
 
-            if cfg.MODEL.TYPE == 'resnet':
-                # replacing first layer
-                self.model.conv1 = new_first_layer
-                # replacing fully connected layer
-                num_ftrs = self.model.fc.in_features
-                self.model.fc = nn.Linear(num_ftrs, cfg.MODEL.OUT_CHANNELS)
-                # https://discuss.pytorch.org/t/how-to-change-no-of-input-channels-to-a-pretrained-model/19379/2
-                # https://discuss.pytorch.org/t/how-to-modify-the-input-channels-of-a-resnet-model/2623/10
-            else:
-                # replacing first layer
-                self.model.features.conv0 = new_first_layer
-                # adding fully connected layer
-                self.fc = nn.Linear(1_000, cfg.MODEL.OUT_CHANNELS)
+            # replacing first layer
+            self.model.conv1 = new_first_layer
+            # https://discuss.pytorch.org/t/how-to-change-no-of-input-channels-to-a-pretrained-model/19379/2
+            # https://discuss.pytorch.org/t/how-to-modify-the-input-channels-of-a-resnet-model/2623/10
+
+        # replacing fully connected layer
+        num_ftrs = self.model.fc.in_features
+        self.model.fc = nn.Linear(num_ftrs, cfg.MODEL.OUT_CHANNELS)
 
         self.relu = torch.nn.ReLU()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.model(x)
-        if self.cfg.MODEL.TYPE == 'densenet':
-            x = self.fc(x)
         x = self.relu(x)
         return x
 
