@@ -1,6 +1,7 @@
 import numpy as np
 from pathlib import Path
 from utils import geofiles
+import geopandas as gpd
 import argparse
 
 
@@ -13,10 +14,19 @@ def assemble_metadata(city: str, features: list, raw_data_path: str, dataset_pat
 
     metadata = {
         'features': features,
+        'census': {},
+        'split': {},
         'samples': [],  # list with all the samples
     }
 
     for split in ['train', 'test']:
+        census_file = Path(raw_data_path) / city / f'{split}_{city}.shp'
+        gdf = gpd.read_file(census_file)
+        for index, row in gdf.iterrows():
+            unit_nr = row['cat']
+            unit_pop = row['Dakar_St_5']
+            metadata['census'][unit_nr] = unit_pop
+            metadata['split'][unit_nr] = split
         units_file = Path(raw_data_path) / city / f'{split}_{city}.tif'
         units, _, _ = geofiles.read_tif(units_file)
 
@@ -31,7 +41,6 @@ def assemble_metadata(city: str, features: list, raw_data_path: str, dataset_pat
                     'split': split,
                     'unit': int(unit),
                 }
-
                 patch_id = f'{i:03d}-{j:03d}'
                 for feature in features:
                     patch_file = Path(dataset_path) / 'features' / city / feature / f'{feature}_{city}_{patch_id}.tif'

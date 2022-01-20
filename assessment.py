@@ -11,7 +11,8 @@ FONTSIZE = 16
 # TODO: add support for pop log
 
 
-def qualitative_assessment_celllevel(cfg: str, run_type: str = 'test', n_samples: int = 30, scale_factor: float = 0.3):
+def qualitative_assessment_celllevel(cfg: experiment_manager.CfgNode, run_type: str = 'test', n_samples: int = 30,
+                                     scale_factor: float = 0.3):
     ds = datasets.CellPopulationDataset(cfg, run_type, no_augmentations=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     net, *_ = networks.load_checkpoint(cfg.INFERENCE_CHECKPOINT, cfg, device)
@@ -49,8 +50,7 @@ def qualitative_assessment_celllevel(cfg: str, run_type: str = 'test', n_samples
     plt.close(fig)
 
 
-def correlation_celllevel(config_name: str, city: str, run_type: str = 'test', scale: str = 'linear'):
-    cfg = experiment_manager.load_cfg(config_name)
+def correlation_celllevel(cfg: experiment_manager.CfgNode, city: str, run_type: str = 'test', scale: str = 'linear'):
     ds = datasets.CellPopulationDataset(cfg, run_type, no_augmentations=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     net, *_ = networks.load_checkpoint(cfg.INFERENCE_CHECKPOINT, cfg, device)
@@ -105,8 +105,7 @@ def correlation_celllevel(config_name: str, city: str, run_type: str = 'test', s
         lines.Line2D([0], [0], marker='.', color='w', markerfacecolor='k', label='Cell', markersize=markersize),
     ]
     ax.legend(handles=legend_elements, fontsize=FONTSIZE, frameon=False, loc='upper center')
-    dirs = paths.load_paths()
-    out_file = Path(dirs.OUTPUT) / 'plots' / f'{city}_correlation_celllevel_{config_name}.png'
+    out_file = Path(cfg.PATHS.OUTPUT) / 'plots' / f'{city}_correlation_celllevel_{cfg.NAME}.png'
     plt.savefig(out_file, dpi=300, bbox_inches='tight')
     plt.show()
 
@@ -132,47 +131,42 @@ def quantitative_assessment_celllevel(config_name: str, run_type: str = 'test'):
     print(f'RMSE: {rmse:.2f}')
 
 
-def run_quantitative_assessment_censuslevel(config_name: str, city: str, run_type: str = 'test'):
-    cfg = experiment_manager.load_cfg(config_name)
+def run_quantitative_assessment_censuslevel(cfg: experiment_manager.CfgNode, city: str, run_type: str = 'test'):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     net, *_ = networks.load_checkpoint(cfg.INFERENCE_CHECKPOINT, cfg, device)
     net.eval()
 
-    dirs = paths.load_paths()
-    census_data = geofiles.load_json(Path(dirs.DATASET) / 'census_data' / f'{run_type}_polygons_dakar.geojson')
-    for f in census_data['features']:
-        pop_census, pred_pop_census = 0, 0
-        poly_id = f['properties']['poly_id']
-        ds = datasets.CensusPopulationDataset(cfg, city, run_type, int(poly_id))
-        if ds.valid_for_assessment and ds.length > 0:
-            f['properties']['valid'] = True
-            for i, index in enumerate(tqdm(range(len(ds)))):
-                item = ds.__getitem__(index)
-                x = item['x']
-                pred_pop = net(x.to(device).unsqueeze(0)).flatten().cpu()
-                pop = item['y'].cpu()
-                pop_census += pop.item()
-                pred_pop_census += pred_pop.item()
+    metadata_file = Path(cfg.PATHS.DATASET) / f'metadata_{city}.json'
+    metadata = geofiles.load_json(metadata_file)
+    census = metadata['census']
 
-            pop_census_ref = f['properties']['POPULATION']
-            f['properties']['population_pred'] = pred_pop_census
-            print(f'Id: {poly_id}: Census Pop: {pop_census_ref} - Pred: {pred_pop_census}')
-        else:
-            f['properties']['population_pred'] = np.NaN
-            f['properties']['valid'] = False
+    data = {}
+    for unit_nr, unit_pop in census.items():
+        unit_nr, unit_pop = int(unit_nr), int(unit_pop)
+        ds = datasets.CensusPopulationDataset(cfg, city, unit_nr)
+        unit_pred = 0
+        unit_gt = 0
+        for i, index in enumerate(tqdm(range(len(ds)))):
+            item = ds.__getitem__(index)
+            x = item['x']
+            pop_pred = net(x.to(device).unsqueeze(0)).flatten().cpu()
+            unit_pred += pop_pred.item()
+            unit_gt += item['y'].cpu().item()
 
-    out_file = Path(dirs.OUTPUT) / 'predictions' / f'{config_name}_{run_type}_{city}.geojson'
-    geofiles.write_json(out_file, census_data)
+        print(f'ID: {unit_nr}: Unit pop: {unit_pop} - Pop GT: {unit_gt:.0f} - Pop Pred: {unit_pred:.0f}')
+        data[str(unit_nr)] = {'ref': unit_pop, 'sum_gt': unit_gt, 'sum_pred': unit_pred, 'split': ds.split}
+
+    out_file = Path(cfg.PATHS.OUTPUT) / 'predictions' / f'{cfg.NAME}_{run_type}_{city}.geojson'
+    geofiles.write_json(out_file, data)
 
 
-def correlation_censuslevel(config_name: str, city: str, run_type: str = 'test', scale: str = 'linear'):
-    dirs = paths.load_paths()
-    pred_file = Path(dirs.OUTPUT) / 'predictions' / f'{config_name}_{run_type}_{city}.geojson'
+def correlation_censuslevel(cfg: experiment_manager.CfgNode, city: str, run_type: str = 'test', scale: str = 'linear'):
+    pred_file = Path(cfg.PATHS.OUTPUT) / 'predictions' / f'{cfg.NAME}_{run_type}_{city}.geojson'
     if not pred_file.exists():
-        run_quantitative_assessment_censuslevel(config_name, city, run_type)
+        run_quantitative_assessment_censuslevel(cfg, city, run_type)
     data = geofiles.load_json(pred_file)
-    gts = [f['properties']['POPULATION'] for f in data['features'] if f['properties']['valid']]
-    preds = [f['properties']['population_pred'] for f in data['features'] if f['properties']['valid']]
+    gts = [v['ref'] for v in data.values() if v['split'] == run_type]
+    preds = [v['sum_pred'] for v in data.values() if v['split'] == run_type]
 
     fig, ax = plt.subplots(1, 1, figsize=(10, 10))
 
@@ -185,12 +179,12 @@ def correlation_censuslevel(config_name: str, city: str, run_type: str = 'test',
     textstr = r'$R^2 = {r_value:.2f}$'.format(r_value=r_value)
     ax.text(0.05, 0.95, textstr, transform=ax.transAxes, fontsize=FONTSIZE,
             verticalalignment='top')
-    pop_max = 100_000
+    pop_max = 30_000
 
     ax.plot([0, pop_max], [0, pop_max], c='k', zorder=-1, label='1:1 line')
 
     if scale == 'linear':
-        ticks = np.linspace(0, pop_max, 5)
+        ticks = np.linspace(0, pop_max, 6)
         pop_min = 0
     else:
         ticks = [1, 10, 100, 1_000]
@@ -206,7 +200,7 @@ def correlation_censuslevel(config_name: str, city: str, run_type: str = 'test',
     ax.set_xlabel('Ground Truth', fontsize=FONTSIZE)
     ax.set_ylabel('Prediction', fontsize=FONTSIZE)
     ax.legend(frameon=False, fontsize=FONTSIZE, loc='upper center')
-    out_file = Path(dirs.OUTPUT) / 'plots' / f'{city}_correlation_censuslevel_{config_name}.png'
+    out_file = Path(cfg.PATHS.OUTPUT) / 'plots' / f'{city}_correlation_censuslevel_{cfg.NAME}.png'
     plt.savefig(out_file, dpi=300, bbox_inches='tight')
     plt.show()
 
@@ -259,14 +253,13 @@ def assessment_argument_parser():
 if __name__ == '__main__':
     args = experiment_manager.default_argument_parser().parse_known_args()[0]
     cfg = experiment_manager.setup_cfg(args)
-    qualitative_assessment_celllevel(cfg)
+    # qualitative_assessment_celllevel(cfg)
 
     # quantitative_assessment(cfg)
     # produce_error_grid(config, 'dakar')
     # run_quantitative_assessment_censuslevel(config, 'dakar')
 
-
-    # correlation_celllevel(config, 'dakar')
-    # correlation_censuslevel(config, 'dakar')
+    # correlation_celllevel(cfg, 'dakar')
+    correlation_censuslevel(cfg, 'dakar')
     # produce_error_grid(config, 'dakar')
 

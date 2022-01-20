@@ -132,16 +132,16 @@ class CellPopulationDataset(AbstractPopulationMappingDataset):
 # dataset for urban extraction with building footprints
 class CensusPopulationDataset(AbstractPopulationMappingDataset):
 
-    def __init__(self, cfg, city: str, run_type: str, poly_id: int):
+    def __init__(self, cfg, city: str, unit_nr: int):
         super().__init__(cfg)
 
-        self.run_type = run_type
-
+        self.unit_nr = unit_nr
         metadata_file = self.root_path / f'metadata_{city}.json'
         metadata = geofiles.load_json(metadata_file)
+        self.unit_pop = metadata['census'][str(unit_nr)]
+        self.split = metadata['split'][str(unit_nr)]
         all_samples = metadata['samples']
-        self.samples = [s for s in all_samples if not math.isnan(s['population']) and s[f'{run_type}_poly'] == poly_id]
-        self.valid_for_assessment = True if np.all([[s['valid_for_assessment'] for s in self.samples]]) else False
+        self.samples = [s for s in all_samples if s['unit'] == unit_nr]
 
         self.transform = transforms.Compose([augmentations.Numpy2Torch()])
 
@@ -162,9 +162,6 @@ class CensusPopulationDataset(AbstractPopulationMappingDataset):
             'y': torch.tensor([population]),
             'i': i,
             'j': j,
-            'train_poly': sample['train_poly'],
-            'test_poly': sample['test_poly'],
-            'valid_for_assessment': sample['valid_for_assessment'],
         }
 
         return item
