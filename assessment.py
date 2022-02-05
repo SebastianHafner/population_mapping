@@ -10,8 +10,8 @@ FONTSIZE = 16
 # TODO: add support for pop log
 
 
-def qualitative_assessment_celllevel(cfg: experiment_manager.CfgNode, run_type: str = 'test', n_samples: int = 30,
-                                     scale_factor: float = 0.3):
+def qualitative_assessment_cell(cfg: experiment_manager.CfgNode, run_type: str = 'test', n_samples: int = 30,
+                                scale_factor: float = 0.3):
     ds = datasets.CellPopulationDataset(cfg, run_type, no_augmentations=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     net, *_ = networks.load_checkpoint(cfg.INFERENCE_CHECKPOINT, cfg, device)
@@ -49,7 +49,7 @@ def qualitative_assessment_celllevel(cfg: experiment_manager.CfgNode, run_type: 
     plt.close(fig)
 
 
-def correlation_celllevel(cfg: experiment_manager.CfgNode, city: str, run_type: str = 'test', scale: str = 'linear'):
+def correlation_cell(cfg: experiment_manager.CfgNode, city: str, run_type: str = 'test', scale: str = 'linear'):
     ds = datasets.CellPopulationDataset(cfg, run_type, no_augmentations=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     net, *_ = networks.load_checkpoint(cfg.INFERENCE_CHECKPOINT, cfg, device)
@@ -104,12 +104,12 @@ def correlation_celllevel(cfg: experiment_manager.CfgNode, city: str, run_type: 
         lines.Line2D([0], [0], marker='.', color='w', markerfacecolor='k', label='Cell', markersize=markersize),
     ]
     ax.legend(handles=legend_elements, fontsize=FONTSIZE, frameon=False, loc='upper center')
-    out_file = Path(cfg.PATHS.OUTPUT) / 'plots' / f'{city}_correlation_celllevel_{cfg.NAME}.png'
+    out_file = Path(cfg.PATHS.OUTPUT) / 'plots' / f'{city}_correlation_cell_{cfg.NAME}.png'
     plt.savefig(out_file, dpi=300, bbox_inches='tight')
     plt.show()
 
 
-def quantitative_assessment_celllevel(config_name: str, run_type: str = 'test'):
+def quantitative_assessment_cell(config_name: str, run_type: str = 'test'):
     cfg = experiment_manager.load_cfg(config_name)
     ds = datasets.CellPopulationDataset(cfg, run_type, no_augmentations=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -130,7 +130,7 @@ def quantitative_assessment_celllevel(config_name: str, run_type: str = 'test'):
     print(f'RMSE: {rmse:.2f}')
 
 
-def run_quantitative_assessment_censuslevel(cfg: experiment_manager.CfgNode, city: str, run_type: str = 'test'):
+def run_quantitative_assessment_census(cfg: experiment_manager.CfgNode, city: str, run_type: str = 'test'):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     net, *_ = networks.load_checkpoint(cfg.INFERENCE_CHECKPOINT, cfg, device)
     net.eval()
@@ -159,10 +159,10 @@ def run_quantitative_assessment_censuslevel(cfg: experiment_manager.CfgNode, cit
     geofiles.write_json(out_file, data)
 
 
-def correlation_censuslevel(cfg: experiment_manager.CfgNode, city: str, run_type: str = 'test', scale: str = 'linear'):
+def correlation_census(cfg: experiment_manager.CfgNode, city: str, run_type: str = 'test', scale: str = 'linear'):
     pred_file = Path(cfg.PATHS.OUTPUT) / 'predictions' / f'{cfg.NAME}_{run_type}_{city}.geojson'
     if not pred_file.exists():
-        run_quantitative_assessment_censuslevel(cfg, city, run_type)
+        run_quantitative_assessment_census(cfg, city, run_type)
     data = geofiles.load_json(pred_file)
     gts = [v['ref'] for v in data.values() if v['split'] == run_type]
     preds = [v['sum_pred'] for v in data.values() if v['split'] == run_type]
@@ -199,19 +199,34 @@ def correlation_censuslevel(cfg: experiment_manager.CfgNode, city: str, run_type
     ax.set_xlabel('Ground Truth', fontsize=FONTSIZE)
     ax.set_ylabel('Prediction', fontsize=FONTSIZE)
     ax.legend(frameon=False, fontsize=FONTSIZE, loc='upper center')
-    out_file = Path(cfg.PATHS.OUTPUT) / 'plots' / f'{city}_correlation_censuslevel_{cfg.NAME}.png'
+    out_file = Path(cfg.PATHS.OUTPUT) / 'plots' / f'{city}_correlation_census_{cfg.NAME}.png'
     plt.savefig(out_file, dpi=300, bbox_inches='tight')
     plt.show()
 
 
-def produce_error_grid(config_name: str, city: str, run_type: str = 'test'):
+def produce_population_grid(cfg: experiment_manager.CfgNode, city: str):
+    ds = datasets.CellInferencePopulationDataset(cfg, city)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    net, *_ = networks.load_checkpoint(cfg.INFERENCE_CHECKPOINT, cfg, device)
+    net.eval()
+    arr = ds.get_arr()
+    transform, crs = ds.get_geo()
+    for item in tqdm(ds):
+        x = item['x'].to(device)
+        i, j = item['i'], item['j']
+        pred_pop = net(x.unsqueeze(0)).flatten().cpu().item()
+        arr[i, j, 0] = pred_pop
+    out_file = Path(cfg.PATHS.OUTPUT) / 'population_grids' / f'pop_{city}_{cfg.NAME}.tif'
+    geofiles.write_tif(out_file, arr, transform, crs)
+
+
+def produce_error_grid(config_name: str, city: str, dataset_path: str, output_path: str):
     cfg = experiment_manager.load_cfg(config_name)
     ds = datasets.CellPopulationDataset(cfg, run_type, no_augmentations=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     net, *_ = networks.load_checkpoint(cfg.INFERENCE_CHECKPOINT, cfg, device)
     net.eval()
 
-    dirs = paths.load_paths()
     pop_file = Path(dirs.DATASET) / 'population_data' / f'pop_{city}.tif'
     pop_arr, transform, crs = geofiles.read_tif(pop_file)
 
@@ -230,35 +245,9 @@ def produce_error_grid(config_name: str, city: str, run_type: str = 'test'):
     geofiles.write_tif(out_file, error, transform, crs)
 
 
-def assessment_argument_parser():
-    # https://docs.python.org/3/library/argparse.html#the-add-argument-method
-    parser = argparse.ArgumentParser(description="Experiment Args")
-
-    parser.add_argument('-c', "--config-file", dest='config_file', required=True, help="path to config file")
-    parser.add_argument('-o', "--output-dir", dest='output_dir', required=True, help="path to output directory")
-    parser.add_argument('-d', "--dataset-dir", dest='dataset_dir', default="", required=True,
-                        help="path to output directory")
-    parser.add_argument('-r', "--run-type", dest='run_type', default="validation", required=False, help="run type")
-
-    parser.add_argument(
-        "opts",
-        help="Modify config options using the command-line",
-        default=None,
-        nargs=argparse.REMAINDER,
-    )
-    return parser
-
-
 if __name__ == '__main__':
-    args = parsers.default_argument_parser().parse_known_args()[0]
+    args = parsers.inference_argument_parser().parse_known_args()[0]
     cfg = experiment_manager.setup_cfg(args)
-    # qualitative_assessment_celllevel(cfg)
-
-    # quantitative_assessment(cfg)
-    # produce_error_grid(config, 'dakar')
-    # run_quantitative_assessment_censuslevel(config, 'dakar')
-
-    # correlation_celllevel(cfg, 'dakar')
-    correlation_censuslevel(cfg, 'nairobi')
-    # produce_error_grid(config, 'dakar')
-
+    for city in args.sites:
+        produce_population_grid(cfg, city)
+        correlation_census(cfg, city)
