@@ -3,23 +3,6 @@ from fvcore.common.config import CfgNode as _CfgNode
 from pathlib import Path
 
 
-def default_argument_parser():
-    # https://docs.python.org/3/library/argparse.html#the-add-argument-method
-    parser = argparse.ArgumentParser(description="Experiment Args")
-    parser.add_argument('-c', "--config-file", dest='config_file', required=True, help="path to config file")
-    parser.add_argument('-o', "--output-dir", dest='output_dir', required=True, help="path to output directory")
-    parser.add_argument('-d', "--dataset-dir", dest='dataset_dir', default="", required=True,
-                        help="path to output directory")
-
-    parser.add_argument(
-        "opts",
-        help="Modify config options using the command-line",
-        default=None,
-        nargs=argparse.REMAINDER,
-    )
-    return parser
-
-
 class CfgNode(_CfgNode):
     """
     The same as `fvcore.common.config.CfgNode`, but different in:
@@ -67,11 +50,12 @@ def new_config():
     return C.clone()
 
 
-def setup_cfg(args):
+def setup_cfg(args, config_name: str = None):
     cfg = new_config()
-    cfg.merge_from_file(f'configs/{args.config_file}.yaml')
+    config_name = args.config_file if config_name is None else config_name
+    cfg.merge_from_file(f'configs/{config_name}.yaml')
     cfg.merge_from_list(args.opts)
-    cfg.NAME = args.config_file
+    cfg.NAME = config_name
     cfg.PATHS.ROOT = str(Path.cwd())
     assert(Path(args.output_dir).exists())
     cfg.PATHS.OUTPUT = args.output_dir

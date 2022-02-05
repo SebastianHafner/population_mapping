@@ -4,9 +4,8 @@ import matplotlib.pyplot as plt
 from matplotlib import lines
 from tqdm import tqdm
 from scipy import stats
-from utils import paths, datasets, experiment_manager, networks, evaluation, geofiles
+from utils import datasets, experiment_manager, networks, evaluation, geofiles, parsers
 from pathlib import Path
-import argparse
 FONTSIZE = 16
 # TODO: add support for pop log
 
@@ -141,12 +140,12 @@ def run_quantitative_assessment_censuslevel(cfg: experiment_manager.CfgNode, cit
     census = metadata['census']
 
     data = {}
-    for unit_nr, unit_pop in census.items():
+    for unit_nr, unit_pop in tqdm(census.items()):
         unit_nr, unit_pop = int(unit_nr), int(unit_pop)
         ds = datasets.CensusPopulationDataset(cfg, city, unit_nr)
         unit_pred = 0
         unit_gt = 0
-        for i, index in enumerate(tqdm(range(len(ds)))):
+        for i, index in enumerate(range(len(ds))):
             item = ds.__getitem__(index)
             x = item['x']
             pop_pred = net(x.to(device).unsqueeze(0)).flatten().cpu()
@@ -251,7 +250,7 @@ def assessment_argument_parser():
 
 
 if __name__ == '__main__':
-    args = experiment_manager.default_argument_parser().parse_known_args()[0]
+    args = parsers.default_argument_parser().parse_known_args()[0]
     cfg = experiment_manager.setup_cfg(args)
     # qualitative_assessment_celllevel(cfg)
 
@@ -260,6 +259,6 @@ if __name__ == '__main__':
     # run_quantitative_assessment_censuslevel(config, 'dakar')
 
     # correlation_celllevel(cfg, 'dakar')
-    correlation_censuslevel(cfg, 'dakar')
+    correlation_censuslevel(cfg, 'nairobi')
     # produce_error_grid(config, 'dakar')
 

@@ -4,8 +4,8 @@ from utils import geofiles, parsers
 import geopandas as gpd
 
 
-def assemble_metadata(city: str, features: list, raw_data_path: str, dataset_path: str):
-
+def assemble_metadata(features: list, raw_data_path: str, dataset_path: str):
+    city = 'dakar'
     # getting the dimensions of the population file first
     pop_file = Path(raw_data_path) / city / f'pop_{city}.tif'
     pop, *_ = geofiles.read_tif(pop_file)
@@ -43,7 +43,7 @@ def assemble_metadata(city: str, features: list, raw_data_path: str, dataset_pat
                 patch_id = f'{i:03d}-{j:03d}'
                 for feature in features:
                     patch_file = Path(dataset_path) / 'features' / city / feature / f'{feature}_{city}_{patch_id}.tif'
-                    assert(patch_file.exists())
+                    assert (patch_file.exists())
                 metadata['samples'].append(sample)
 
     metadata_file = Path(dataset_path) / f'metadata_{city}.json'
@@ -52,6 +52,5 @@ def assemble_metadata(city: str, features: list, raw_data_path: str, dataset_pat
 
 if __name__ == '__main__':
     args = parsers.metadata_argument_parser().parse_known_args()[0]
-    assemble_metadata(args.city, args.features, args.rawdata_dir, args.dataset_dir)
-
+    assemble_metadata(args.features, args.rawdata_dir, args.dataset_dir)
 

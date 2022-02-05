@@ -1,0 +1,13 @@
+_BASE_: "base.yaml"
+DEBUG: False
+
+MODEL:
+  IN_CHANNELS: 5
+
+DATALOADER:
+  FEATURES: [ 's2', 'bf' ]
+  S2_BAND_INDICES: [ 2, 1, 0, 3 ]
+
+DATASET:
+  LABELED_CITIES: [ 'dakar' ]
+  CENSUS_EVALUATION_CITIES: [ 'dakar', 'nairobi', 'daressalaam' ]

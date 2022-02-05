@@ -1,11 +1,17 @@
 from pathlib import Path
 from affine import Affine
 from tqdm import tqdm
-from utils import geofiles
-import argparse
+from utils import geofiles, parsers
 
+# pleidas https://docs.sentinel-hub.com/api/latest/data/airbus/pleiades/
+# worldview-3 http://worldview3.digitalglobe.com/
 # x min, x max, y min, y max
 # extent dakar [227600, 256500, 1620600, 1639800]
+# extent nairobi [240100, 289150, 9840110, 9871640]
+# extent daressalaam [508530, 542730, 9226610, 9268710]
+# extent ouagadougou []
+# -c nairobi -f vhr -e 240100 289150 9840110 9871640 -p 100 -r C:/Users/shafner/population_mapping/raw_data -d C:/Users/shafner/datasets/pop_dataset
+# -c dakar -f vhr -e 227600 256500 1620600 1639800 -p 100 -r C:/Users/shafner/population_mapping/raw_data -d C:/Users/shafner/datasets/pop_dataset
 
 
 # split a feature (e.g. vhr satellite data) into patches
@@ -55,28 +61,8 @@ def tile_image(city: str, feature: str, extent: list, patch_size: int, raw_data_
             geofiles.write_tif(file, patch, transform_patch, crs)
 
 
-def tiling_argument_parser():
-    # https://docs.python.org/3/library/argparse.html#the-add-argument-method
-    parser = argparse.ArgumentParser(description="Experiment Args")
-    parser.add_argument('-c', "--city", dest='city', required=True)
-    parser.add_argument('-f', "--feature", dest='feature', required=True)
-    parser.add_argument('-e' "--extent", nargs="+", dest='extent', required=True)
-    parser.add_argument('-p' "--patch-size", dest='patch_size', required=True)
-    parser.add_argument('-r', "--rawdata-dir", dest='rawdata_dir', required=True, help="path to raw data directory")
-    parser.add_argument('-d', "--dataset-dir", dest='dataset_dir', default="", required=True,
-                        help="path to dataset directory")
-
-    parser.add_argument(
-        "opts",
-        help="Modify config options using the command-line",
-        default=None,
-        nargs=argparse.REMAINDER,
-    )
-    return parser
-
-
 if __name__ == '__main__':
-    args = tiling_argument_parser().parse_known_args()[0]
+    args = parsers.tiling_argument_parser().parse_known_args()[0]
     tile_image(args.city, args.feature, args.extent, args.patch_size, args.rawdata_dir, args.dataset_dir)
 
 

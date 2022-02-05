@@ -1,7 +1,7 @@
 from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
-from utils import paths, geofiles, datasets, experiment_manager
+from utils import geofiles, datasets, experiment_manager, parsers, visualization
 
 
 def check_metadata_file(city: str):
@@ -35,6 +35,31 @@ def check_dataset(config_name: str, n_samples: int = 5):
         ax.set_axis_off()
         plt.show()
         plt.close(fig)
+
+
+def check_features(features: list, city: str, dataset_path: str):
+    metadata_file = Path(dataset_path) / f'metadata_{city}.json'
+    metadata = geofiles.load_json(metadata_file)
+    samples = metadata['samples']
+    order = list(np.random.rand(len(samples)))
+    samples_random = [s for _, s in sorted(zip(order, samples), key=lambda pair: pair[0])]
+
+    plot_size = 3
+    m, n = 10, 10
+    fig, axs = plt.subplots(m, n, figsize=(n * plot_size, m * plot_size))
+    plt.tight_layout()
+    for i, ax in enumerate(list(axs.flatten())):
+        sample = samples_random[i]
+        i, j = sample['i'], sample['j']
+        if feature == 'vhr':
+            visualization.plot_vhr(ax, dataset_path, city, i, j)
+        elif feature == 's2':
+            visualization.plot_s2(ax, dataset_path, city, i, j)
+        elif feature == 'bf':
+            visualization.plot_bf(ax, dataset_path, city, i, j)
+        else:
+            raise Exception(f'{feature} unknown feature')
+    plt.show()
 
 
 if __name__ == '__main__':

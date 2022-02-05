@@ -30,7 +30,10 @@ def run_dual_training(dual_cfg: experiment_manager.CfgNode):
     dual_net = networks.DualStreamPopulationNet(cfg1, cfg2)
     dual_net.to(device)
     optimizer = optim.AdamW(dual_net.parameters(), lr=dual_cfg.CFG1.TRAINER.LR, weight_decay=0.01)
-    criterion = loss_functions.get_criterion(cfg1.MODEL.LOSS_TYPE)
+
+    criterion_stream1 = loss_functions.get_criterion(cfg1.MODEL.LOSS_TYPE)
+    criterion_stream2 = loss_functions.get_criterion(cfg2.MODEL.LOSS_TYPE)
+    criterion_fusion = loss_functions.get_criterion(cfg1.MODEL.LOSS_TYPE)
 
     # reset the generators
     dataset = datasets.CellDualInputPopulationDataset(dual_cfg=dual_cfg, run_type='train')
@@ -57,7 +60,7 @@ def run_dual_training(dual_cfg: experiment_manager.CfgNode):
         print(f'Starting epoch {epoch}/{epochs}.')
 
         start = timeit.default_timer()
-        loss_set, pop_set = [], []
+        loss_set_stream1, loss_set_stream2, loss_set_fusion, loss_set, pop_set = [], [], [], [], []
 
         for i, (batch) in enumerate(dataloader):
 
@@ -67,13 +70,21 @@ def run_dual_training(dual_cfg: experiment_manager.CfgNode):
             x1 = batch['x1'].to(device)
             x2 = batch['x2'].to(device)
             gt = batch['y'].to(device)
-            pred, _, _ = dual_net(x1, x2)
+            pred_fusion, pred_stream1, pred_stream2 = dual_net(x1, x2)
 
-            loss = criterion(pred, gt.float())
+            loss_stream1 = criterion_stream1(pred_stream1, gt.float())
+            loss_stream2 = criterion_stream2(pred_stream2, gt.float())
+            loss_fusion = criterion_fusion(pred_fusion, gt.float())
+            if dual_cfg.STREAM_LOSSES_ENABLED:
+                loss = loss_stream1 + loss_stream2 + loss_fusion
+            else:
+                loss = loss_fusion
             loss.backward()
             optimizer.step()
 
-            loss.append(loss.item())
+            loss_set_stream1.append(loss_stream1.item())
+            loss_set_stream2.append(loss_stream2.item())
+            loss_set_fusion.append(loss_fusion.item())
             loss_set.append(loss.item())
             pop_set.append(gt.flatten())
 
@@ -96,6 +107,9 @@ def run_dual_training(dual_cfg: experiment_manager.CfgNode):
                 null_percentage = torch.sum(pop_set == 0) / torch.numel(pop_set) * 100
                 wandb.log({
                     'loss': np.mean(loss_set),
+                    'loss_stream1': np.mean(loss_set_stream1),
+                    'loss_stream2': np.mean(loss_set_stream2),
+                    'loss_fusion': np.mean(loss_set_fusion),
                     'labeled_percentage': 100,
                     'mean_population': mean_pop,
                     'null_percentage': null_percentage,
@@ -108,10 +122,10 @@ def run_dual_training(dual_cfg: experiment_manager.CfgNode):
 
             if dual_cfg.DEBUG:
                 # testing evaluation
-                evaluation.model_evaluation_cell_dualstream(dual_net, dual_cfg, 'train', epoch_float, global_step,
-                                                            max_samples=1_000)
-                evaluation.model_evaluation_cell_dualstream(dual_net, dual_cfg, 'test', epoch_float, global_step,
-                                                            max_samples=1_000)
+                evaluation.model_evaluation_dualstream(dual_net, dual_cfg, 'train', epoch_float, global_step,
+                                                       max_samples=1_000)
+                evaluation.model_evaluation_dualstream(dual_net, dual_cfg, 'test', epoch_float, global_step,
+                                                       max_samples=1_000)
                 break
             # end of batch
 
@@ -124,11 +138,8 @@ def run_dual_training(dual_cfg: experiment_manager.CfgNode):
             networks.save_checkpoint(dual_net, optimizer, epoch, global_step, cfg1)
 
             # logs to load network
-            evaluation.model_evaluation_cell_dualstream(dual_net, dual_cfg, 'train', epoch_float, global_step)
-            evaluation.model_evaluation_cell_dualstream(dual_net, dual_cfg, 'test', epoch_float, global_step)
-            for city in dual_cfg.CFG1.DATASET.CENSUS_EVALUATION_CITIES:
-                print(f'Running census-level evaluation for {city}...')
-                evaluation.model_evaluation_census_dualstream(dual_net, dual_cfg, city)
+            evaluation.model_evaluation_dualstream(dual_net, dual_cfg, 'train', epoch_float, global_step)
+            evaluation.model_evaluation_dualstream(dual_net, dual_cfg, 'test', epoch_float, global_step)
 
 
 if __name__ == '__main__':

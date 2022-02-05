@@ -73,7 +73,7 @@ class GammaCorrection(object):
 
     def __call__(self, img: np.ndarray) -> np.ndarray:
         gamma = np.random.uniform(self.min_gamma, self.max_gamma, img.shape[-1])
-        img_gamma_corrected = np.clip(np.power(img,gamma[np.newaxis, np.newaxis, :]), 0, 1).astype(np.float32)
+        img_gamma_corrected = np.clip(np.power(img, gamma[np.newaxis, np.newaxis, :]), 0, 1).astype(np.float32)
         return img_gamma_corrected
 
 

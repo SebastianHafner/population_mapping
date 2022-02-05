@@ -38,59 +38,51 @@ def create_ema_network(net, cfg):
     return ema_net
 
 
+class DualStreamPopulationNet(nn.Module):
+
+    def __init__(self, cfg1, cfg2):
+        super(DualStreamPopulationNet, self).__init__()
+        self.cfg1 = cfg1
+        self.cfg2 = cfg2
+
+        self.stream1 = PopulationNet(cfg1, enable_fc=False)
+        self.stream2 = PopulationNet(cfg2, enable_fc=False)
+
+        stream1_num_ftrs = self.stream1.model.fc.in_features
+        stream2_num_ftrs = self.stream2.model.fc.in_features
+        self.outc = nn.Linear(stream1_num_ftrs + stream2_num_ftrs, self.cfg1.MODEL.OUT_CHANNELS)
+        self.relu = torch.nn.ReLU()
+
+    def forward(self, x1: torch.Tensor, x2: torch.Tensor) -> tuple:
+        features1 = self.stream1(x1)
+        features2 = self.stream2(x2)
+        p1 = self.relu(self.stream1.model.fc(features1))
+        p2 = self.relu(self.stream2.model.fc(features2))
+        features_fusion = torch.cat((features1, features2), dim=1)
+        p_fusion = self.relu(self.outc(features_fusion))
+        return p_fusion, p1, p2
+
+
 class PopulationNet(nn.Module):
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, enable_fc: bool = True):
         super(PopulationNet, self).__init__()
         self.cfg = cfg
+        self.enable_fc = enable_fc
         pt = cfg.MODEL.PRETRAINED
-        if cfg.MODEL.TYPE == 'resnet':
-            if cfg.MODEL.SIZE == 18:
-                self.model = torchvision.models.resnet18(pretrained=pt)
-            elif cfg.MODEL.SIZE == 50:
-                self.model = torchvision.models.resnet50(pretrained=pt)
-            else:
-                raise Exception(f'Unkown resnet size ({cfg.MODEL.SIZE}).')
-        elif cfg.MODEL.TYPE == 'densenet':
-            if cfg.MODEL.SIZE == 121:
-                self.model = torchvision.models.densenet121(pretrained=pt)
-            elif cfg.MODEL.SIZE == 161:
-                self.model = torchvision.models.densenet161(pretrained=pt)
-            else:
-                raise Exception(f'Unkown densenet size ({cfg.MODEL.SIZE}).')
+        assert (cfg.MODEL.TYPE == 'resnet')
+        if cfg.MODEL.SIZE == 18:
+            self.model = torchvision.models.resnet18(pretrained=pt)
+        elif cfg.MODEL.SIZE == 50:
+            self.model = torchvision.models.resnet50(pretrained=pt)
         else:
-            if cfg.MODEL.TYPE == 'alexnet':
-                self.model = torchvision.models.alexnet(pretrained=pt)
-            elif cfg.MODEL.TYPE == 'vgg16':
-                self.model = torchvision.models.vgg16(pretrained=pt)
-            elif cfg.MODEL.TYPE == 'squeezenet1':
-                self.model = torchvision.models.squeezenet1_0(pretrained=pt)
-            elif cfg.MODEL.TYPE == 'inceptionv3':
-                self.model = torchvision.models.inception_v3(pretrained=pt)
-            elif cfg.MODEL.TYPE == 'googlenet':
-                self.model = torchvision.models.googlenet(pretrained=pt)
-            elif cfg.MODEL.TYPE == 'shufflenet':
-                self.model = torchvision.models.shufflenet_v2_x1_0(pretrained=pt)
-            elif cfg.MODEL.TYPE == 'mobilnetv2':
-                self.model = torchvision.models.mobilenet_v2(pretrained=pt)
-            elif cfg.MODEL.TYPE == 'resnext5032x4d':
-                self.model = torchvision.models.resnext50_32x4d(pretrained=pt)
-            elif cfg.MODEL.TYPE == 'wideresnet502':
-                self.model = torchvision.models.wide_resnet50_2(pretrained=pt)
-            elif cfg.MODEL.TYPE == 'mnasnet':
-                self.model = torchvision.models.mnasnet1_0(pretrained=pt)
-            elif cfg.MODEL.TYPE == 'efficientnetb4':
-                self.model = torchvision.models.efficientnet_b4(pretrained=pt)
-            elif cfg.MODEL.TYPE == 'wideresnet50':
-                self.model = torchvision.models.wide_resnet50_2(pretrained=pt)
-            else:
-                raise Exception(f'Unkown network ({cfg.MODEL.TYPE}).')
+            raise Exception(f'Unkown resnet size ({cfg.MODEL.SIZE}).')
 
         new_in_channels = cfg.MODEL.IN_CHANNELS
 
         if new_in_channels != 3:
             # only implemented for resnet
-            assert(cfg.MODEL.TYPE == 'resnet')
+            assert (cfg.MODEL.TYPE == 'resnet')
 
             first_layer = self.model.conv1
             # Creating new Conv2d layer
@@ -118,12 +110,18 @@ class PopulationNet(nn.Module):
         # replacing fully connected layer
         num_ftrs = self.model.fc.in_features
         self.model.fc = nn.Linear(num_ftrs, cfg.MODEL.OUT_CHANNELS)
-
         self.relu = torch.nn.ReLU()
+        self.encoder = torch.nn.Sequential(*(list(self.model.children())[:-1]))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.model(x)
-        x = self.relu(x)
+        if self.enable_fc:
+            x = self.model(x)
+            x = self.relu(x)
+        else:
+            x = self.encoder(x)
+            x = x.squeeze()
+            if len(x.shape) == 1:
+                x = x.unsqueeze(0)
         return x
 
 

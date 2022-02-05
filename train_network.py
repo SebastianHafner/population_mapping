@@ -10,7 +10,7 @@ from tabulate import tabulate
 import wandb
 import numpy as np
 
-from utils import networks, datasets, loss_functions, evaluation, experiment_manager
+from utils import networks, datasets, loss_functions, evaluation, experiment_manager, parsers
 
 
 def run_training(cfg):
@@ -82,8 +82,8 @@ def run_training(cfg):
                 print(f'Logging step {global_step} (epoch {epoch_float:.2f}).')
 
                 # evaluation on sample of training and validation set
-                evaluation.model_evaluation(net, cfg, 'train', epoch_float, global_step, max_samples=1_000)
-                evaluation.model_evaluation(net, cfg, 'test', epoch_float, global_step, max_samples=1_000)
+                evaluation.model_evaluation_cell(net, cfg, 'train', epoch_float, global_step, max_samples=1_000)
+                evaluation.model_evaluation_cell(net, cfg, 'test', epoch_float, global_step, max_samples=1_000)
 
                 # logging
                 time = timeit.default_timer() - start
@@ -104,8 +104,9 @@ def run_training(cfg):
 
             if cfg.DEBUG:
                 # testing evaluation
-                evaluation.model_evaluation(net, cfg, 'train', epoch_float, global_step, max_samples=1_000)
-                evaluation.model_evaluation(net, cfg, 'test', epoch_float, global_step, max_samples=1_000)
+                evaluation.model_evaluation_census(net, cfg, 'nairobi')
+                evaluation.model_evaluation_cell(net, cfg, 'train', epoch_float, global_step, max_samples=1_000)
+                evaluation.model_evaluation_cell(net, cfg, 'test', epoch_float, global_step, max_samples=1_000)
                 break
             # end of batch
 
@@ -117,14 +118,17 @@ def run_training(cfg):
             print(f'saving network', flush=True)
             networks.save_checkpoint(net, optimizer, epoch, global_step, cfg)
 
-            # logs to load network
-            evaluation.model_evaluation(net, cfg, 'train', epoch_float, global_step)
-            evaluation.model_evaluation(net, cfg, 'test', epoch_float, global_step)
+            # final evaluation
+            evaluation.model_evaluation_cell(net, cfg, 'train', epoch_float, global_step)
+            evaluation.model_evaluation_cell(net, cfg, 'test', epoch_float, global_step)
+            for city in cfg.DATASET.CENSUS_EVALUATION_CITIES:
+                print(f'Running census-level evaluation for {city}...')
+                evaluation.model_evaluation_census(net, cfg, city)
 
 
 if __name__ == '__main__':
 
-    args = experiment_manager.default_argument_parser().parse_known_args()[0]
+    args = parsers.default_argument_parser().parse_known_args()[0]
     cfg = experiment_manager.setup_cfg(args)
 
     # make training deterministic
