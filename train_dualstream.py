@@ -125,7 +125,7 @@ def run_dual_training(dual_cfg: experiment_manager.CfgNode):
             # logs to load network
             evaluation.model_evaluation_cell_dualstream(dual_net, dual_cfg, 'train', epoch_float, global_step)
             evaluation.model_evaluation_cell_dualstream(dual_net, dual_cfg, 'test', epoch_float, global_step)
-            for city in dual_cfg.CFG1.DATASET.CENSUS_EVALUATION_CITIES:
+            for city in dual_cfg.DATASET.CENSUS_EVALUATION_CITIES:
                 print(f'Running census-level evaluation for {city}...')
                 evaluation.model_evaluation_census_dualstream(dual_net, dual_cfg, city)
 
