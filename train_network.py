@@ -26,7 +26,7 @@ def run_training(cfg):
              }
     print(tabulate(table, headers='keys', tablefmt="fancy_grid", ))
 
-    net = networks.PopulationNet(cfg)
+    net = networks.PopulationNet(cfg.MODEL)
     net.to(device)
     optimizer = optim.AdamW(net.parameters(), lr=cfg.TRAINER.LR, weight_decay=0.01)
 
@@ -128,7 +128,7 @@ def run_training(cfg):
 
 if __name__ == '__main__':
 
-    args = parsers.default_argument_parser().parse_known_args()[0]
+    args = parsers.training_argument_parser().parse_known_args()[0]
     cfg = experiment_manager.setup_cfg(args)
 
     # make training deterministic

@@ -40,17 +40,18 @@ def create_ema_network(net, cfg):
 
 class DualStreamPopulationNet(nn.Module):
 
-    def __init__(self, cfg1, cfg2):
+    def __init__(self, dual_model_cfg: experiment_manager.CfgNode):
         super(DualStreamPopulationNet, self).__init__()
-        self.cfg1 = cfg1
-        self.cfg2 = cfg2
+        self.dual_model_cfg = dual_model_cfg
+        self.stream1_cfg = dual_model_cfg.STREAM1
+        self.stream2_cfg = dual_model_cfg.STREAM2
 
-        self.stream1 = PopulationNet(cfg1, enable_fc=False)
-        self.stream2 = PopulationNet(cfg2, enable_fc=False)
+        self.stream1 = PopulationNet(self.stream1_cfg, enable_fc=False)
+        self.stream2 = PopulationNet(self.stream2_cfg, enable_fc=False)
 
         stream1_num_ftrs = self.stream1.model.fc.in_features
         stream2_num_ftrs = self.stream2.model.fc.in_features
-        self.outc = nn.Linear(stream1_num_ftrs + stream2_num_ftrs, self.cfg1.MODEL.OUT_CHANNELS)
+        self.outc = nn.Linear(stream1_num_ftrs + stream2_num_ftrs, dual_model_cfg.OUT_CHANNELS)
         self.relu = torch.nn.ReLU()
 
     def forward(self, x1: torch.Tensor, x2: torch.Tensor) -> tuple:
@@ -65,24 +66,24 @@ class DualStreamPopulationNet(nn.Module):
 
 class PopulationNet(nn.Module):
 
-    def __init__(self, cfg, enable_fc: bool = True):
+    def __init__(self, model_cfg, enable_fc: bool = True):
         super(PopulationNet, self).__init__()
-        self.cfg = cfg
+        self.model_cfg = model_cfg
         self.enable_fc = enable_fc
-        pt = cfg.MODEL.PRETRAINED
-        assert (cfg.MODEL.TYPE == 'resnet')
-        if cfg.MODEL.SIZE == 18:
+        pt = model_cfg.PRETRAINED
+        assert (model_cfg.TYPE == 'resnet')
+        if model_cfg.SIZE == 18:
             self.model = torchvision.models.resnet18(pretrained=pt)
-        elif cfg.MODEL.SIZE == 50:
+        elif model_cfg.SIZE == 50:
             self.model = torchvision.models.resnet50(pretrained=pt)
         else:
-            raise Exception(f'Unkown resnet size ({cfg.MODEL.SIZE}).')
+            raise Exception(f'Unkown resnet size ({model_cfg.SIZE}).')
 
-        new_in_channels = cfg.MODEL.IN_CHANNELS
+        new_in_channels = model_cfg.IN_CHANNELS
 
         if new_in_channels != 3:
             # only implemented for resnet
-            assert (cfg.MODEL.TYPE == 'resnet')
+            assert (model_cfg.TYPE == 'resnet')
 
             first_layer = self.model.conv1
             # Creating new Conv2d layer
@@ -109,7 +110,7 @@ class PopulationNet(nn.Module):
 
         # replacing fully connected layer
         num_ftrs = self.model.fc.in_features
-        self.model.fc = nn.Linear(num_ftrs, cfg.MODEL.OUT_CHANNELS)
+        self.model.fc = nn.Linear(num_ftrs, model_cfg.OUT_CHANNELS)
         self.relu = torch.nn.ReLU()
         self.encoder = torch.nn.Sequential(*(list(self.model.children())[:-1]))
 

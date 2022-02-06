@@ -114,7 +114,7 @@ def model_evaluation_cell_dualstream(dual_net: networks.DualStreamPopulationNet,
 
     dataloader_kwargs = {
         'batch_size': 1,
-        'num_workers': 0 if dual_cfg.DEBUG else dual_cfg.CFG1.DATALOADER.NUM_WORKER,
+        'num_workers': 0 if dual_cfg.DEBUG else dual_cfg.DATALOADER.NUM_WORKER,
         'shuffle': True,
         'pin_memory': True,
     }
@@ -152,4 +152,43 @@ def model_evaluation_cell_dualstream(dual_net: networks.DualStreamPopulationNet,
         f'{run_type} rmse_stream2': rmse_stream2,
         'step': step,
         'epoch': epoch,
+    })
+
+
+def model_evaluation_census_dualstream(dual_net: networks.DualStreamPopulationNet, dual_cfg: experiment_manager.CfgNode, city: str):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    dual_net.to(device)
+    dual_net.eval()
+
+    measurer = RegressionEvaluation()
+
+    metadata_file = Path(dual_cfg.PATHS.DATASET) / f'metadata_{city}.json'
+    metadata = geofiles.load_json(metadata_file)
+    census = metadata['census']
+
+    gt_units = []
+    pred_units = []
+    for unit_nr, unit_gt in tqdm(census.items()):
+        unit_nr, unit_gt = int(unit_nr), int(unit_gt)
+        ds = datasets.CensusDualInputPopulationDataset(dual_cfg, city, unit_nr)
+        if ds.split == 'train':
+            continue
+        unit_pred = 0
+        for i, index in enumerate(range(len(ds))):
+            item = ds.__getitem__(index)
+            x1 = item['x1'].to(device)
+            x2 = item['x2'].to(device)
+            y = item['y'].to(device)
+
+            pop_pred, _, _ = dual_net(x1.to(device).unsqueeze(0), x2.to(device).unsqueeze(0))
+            measurer.add_sample(pop_pred, y)
+            unit_pred += pop_pred.cpu().item()
+            unit_gt += item['y'].cpu().item()
+        gt_units.append(unit_gt)
+        pred_units.append(unit_pred)
+    rmse = measurer.root_mean_square_error()
+    slope, intercept, r_value, p_value, std_err = stats.linregress(gt_units, pred_units)
+    wandb.log({
+        f'{city} rmse': rmse,
+        f'{city} r2': r_value,
     })

@@ -15,3 +15,9 @@ DATALOADER:
 DATASET:
   LABELED_CITIES: [ 'dakar' ]
   CENSUS_EVALUATION_CITIES: [ 'dakar', 'nairobi', 'daressalaam' ]
+  
+  AUGMENTATION:
+    STREAM1:
+      GAMMA_CORRECTION: True
+    STREAM2:
+      GAMMA_CORRECTION: False

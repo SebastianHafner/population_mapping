@@ -2,22 +2,23 @@ import torch
 import torchvision.transforms.functional as TF
 from torchvision import transforms
 import numpy as np
+from utils import experiment_manager
 import cv2
 
 
-def compose_transformations(cfg):
+def compose_transformations(augmentation_cfg):
     transformations = []
 
-    if cfg.AUGMENTATION.RANDOM_FLIP:
+    if augmentation_cfg.RANDOM_FLIP:
         transformations.append(RandomFlip())
 
-    if cfg.AUGMENTATION.RANDOM_ROTATE:
+    if augmentation_cfg.RANDOM_ROTATE:
         transformations.append(RandomRotate())
 
-    if cfg.AUGMENTATION.COLOR_SHIFT:
+    if augmentation_cfg.COLOR_SHIFT:
         transformations.append(ColorShift())
 
-    if cfg.AUGMENTATION.GAMMA_CORRECTION:
+    if augmentation_cfg.GAMMA_CORRECTION:
         transformations.append(GammaCorrection())
 
     transformations.append(Numpy2Torch())

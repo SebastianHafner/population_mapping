@@ -14,40 +14,39 @@ from utils import networks, datasets, loss_functions, evaluation, experiment_man
 
 
 def run_dual_training(dual_cfg: experiment_manager.CfgNode):
-    cfg1, cfg2 = dual_cfg.CFG1, dual_cfg.CFG2
     run_config = {
         'CONFIG_NAME': dual_cfg.NAME,
         'device': device,
-        'epochs': dual_cfg.CFG1.TRAINER.EPOCHS,
-        'learning rate': dual_cfg.CFG1.TRAINER.LR,
-        'batch size': dual_cfg.CFG1.TRAINER.BATCH_SIZE,
+        'epochs': dual_cfg.TRAINER.EPOCHS,
+        'learning rate': dual_cfg.TRAINER.LR,
+        'batch size': dual_cfg.TRAINER.BATCH_SIZE,
     }
     table = {'run config name': run_config.keys(),
              ' ': run_config.values(),
              }
     print(tabulate(table, headers='keys', tablefmt="fancy_grid", ))
 
-    dual_net = networks.DualStreamPopulationNet(cfg1, cfg2)
+    dual_net = networks.DualStreamPopulationNet(dual_cfg.MODEL)
     dual_net.to(device)
-    optimizer = optim.AdamW(dual_net.parameters(), lr=dual_cfg.CFG1.TRAINER.LR, weight_decay=0.01)
-    criterion = loss_functions.get_criterion(cfg1.MODEL.LOSS_TYPE)
+    optimizer = optim.AdamW(dual_net.parameters(), lr=dual_cfg.TRAINER.LR, weight_decay=0.01)
+    criterion = loss_functions.get_criterion(dual_cfg.MODEL.LOSS_TYPE)
 
     # reset the generators
-    dataset = datasets.CellDualInputPopulationDataset(dual_cfg=dual_cfg, run_type='train')
+    dataset = datasets.CellDualInputPopulationDataset(dual_cfg, run_type='train')
     print(dataset)
 
     dataloader_kwargs = {
-        'batch_size': cfg1.TRAINER.BATCH_SIZE,
-        'num_workers': 0 if dual_cfg.DEBUG else cfg1.DATALOADER.NUM_WORKER,
-        'shuffle': dual_cfg.CFG1.DATALOADER.SHUFFLE,
+        'batch_size': dual_cfg.TRAINER.BATCH_SIZE,
+        'num_workers': 0 if dual_cfg.DEBUG else dual_cfg.DATALOADER.NUM_WORKER,
+        'shuffle': dual_cfg.DATALOADER.SHUFFLE,
         'drop_last': True,
         'pin_memory': True,
     }
     dataloader = torch_data.DataLoader(dataset, **dataloader_kwargs)
 
     # unpacking cfg
-    epochs = cfg1.TRAINER.EPOCHS
-    save_checkpoints = cfg1.SAVE_CHECKPOINTS
+    epochs = dual_cfg.TRAINER.EPOCHS
+    save_checkpoints = dual_cfg.SAVE_CHECKPOINTS
     steps_per_epoch = len(dataloader)
 
     # tracking variables
@@ -73,14 +72,13 @@ def run_dual_training(dual_cfg: experiment_manager.CfgNode):
             loss.backward()
             optimizer.step()
 
-            loss.append(loss.item())
             loss_set.append(loss.item())
             pop_set.append(gt.flatten())
 
             global_step += 1
             epoch_float = global_step / steps_per_epoch
 
-            if global_step % cfg1.LOG_FREQ == 0 and not dual_cfg.DEBUG:
+            if global_step % dual_cfg.LOG_FREQ == 0 and not dual_cfg.DEBUG:
                 print(f'Logging step {global_step} (epoch {epoch_float:.2f}).')
 
                 # evaluation on sample of training and validation set
@@ -108,6 +106,7 @@ def run_dual_training(dual_cfg: experiment_manager.CfgNode):
 
             if dual_cfg.DEBUG:
                 # testing evaluation
+                evaluation.model_evaluation_census_dualstream(dual_net, dual_cfg, 'dakar')
                 evaluation.model_evaluation_cell_dualstream(dual_net, dual_cfg, 'train', epoch_float, global_step,
                                                             max_samples=1_000)
                 evaluation.model_evaluation_cell_dualstream(dual_net, dual_cfg, 'test', epoch_float, global_step,
@@ -121,7 +120,7 @@ def run_dual_training(dual_cfg: experiment_manager.CfgNode):
 
         if epoch in save_checkpoints and not dual_cfg.DEBUG:
             print(f'saving network', flush=True)
-            networks.save_checkpoint(dual_net, optimizer, epoch, global_step, cfg1)
+            networks.save_checkpoint(dual_net, optimizer, epoch, global_step, dual_cfg)
 
             # logs to load network
             evaluation.model_evaluation_cell_dualstream(dual_net, dual_cfg, 'train', epoch_float, global_step)
@@ -132,14 +131,12 @@ def run_dual_training(dual_cfg: experiment_manager.CfgNode):
 
 
 if __name__ == '__main__':
-
-    args = parsers.dualstream_argument_parser().parse_known_args()[0]
-    cfg1 = experiment_manager.setup_cfg(args, config_name=args.config_file1)
-    cfg2 = experiment_manager.setup_cfg(args, config_name=args.config_file2)
+    args = parsers.training_argument_parser().parse_known_args()[0]
+    dual_cfg = experiment_manager.setup_cfg(args)
 
     # make training deterministic
-    torch.manual_seed(cfg1.SEED)
-    np.random.seed(cfg1.SEED)
+    torch.manual_seed(dual_cfg.SEED)
+    np.random.seed(dual_cfg.SEED)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
@@ -147,12 +144,6 @@ if __name__ == '__main__':
 
     print('=== Runnning on device: p', device)
 
-    dual_cfg = experiment_manager.CfgNode()
-    dual_cfg.CFG1 = cfg1
-    dual_cfg.CFG2 = cfg2
-    dual_cfg.NAME = f'dualstream_{cfg1.NAME}_{cfg2.NAME}'
-    dual_cfg.STREAM_LOSSES_ENABLED = False
-    dual_cfg.DEBUG = True if args.debug == 'True' else False
     wandb.init(
         name=dual_cfg.NAME,
         config=dual_cfg,

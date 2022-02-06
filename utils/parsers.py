@@ -1,7 +1,7 @@
 import argparse
 
 
-def default_argument_parser():
+def training_argument_parser():
     # https://docs.python.org/3/library/argparse.html#the-add-argument-method
     parser = argparse.ArgumentParser(description="Experiment Args")
     parser.add_argument('-c', "--config-file", dest='config_file', required=True, help="path to config file")

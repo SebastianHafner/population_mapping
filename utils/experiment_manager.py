@@ -44,7 +44,7 @@ def new_config():
     C.TRAINER = CfgNode()
     C.MODEL = CfgNode()
     C.DATALOADER = CfgNode()
-    C.DATASETS = CfgNode()
+    C.DATASET = CfgNode()
     C.AUGMENTATIONS = CfgNode()
 
     return C.clone()
@@ -62,14 +62,5 @@ def setup_cfg(args, config_name: str = None):
     assert(Path(args.dataset_dir).exists())
     cfg.PATHS.DATASET = args.dataset_dir
     return cfg
-
-
-def load_cfg(config_name: str):
-    cfg = new_config()
-    cfg_file = Path.cwd() / 'configs' / f'{config_name}.yaml'
-    cfg.merge_from_file(str(cfg_file))
-    cfg.NAME = config_name
-    return cfg
-
 
 
