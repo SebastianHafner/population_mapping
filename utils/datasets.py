@@ -232,15 +232,17 @@ class CellDualInputPopulationDataset(AbstractPopulationMappingDataset):
         self.include_unlabeled = include_unlabeled
 
         self.cities = list(self.cfg.DATASET.LABELED_CITIES)
-        if self.cfg.DATALOADER.INCLUDE_UNLABELED:
+        if self.cfg.DATALOADER.INCLUDE_UNLABELED and include_unlabeled:
             self.cities.extend(list(self.cfg.DATASET.UNLABELED_CITIES))
 
         self.samples = []
         for city in self.cities:
             city_metadata_file = self.root_path / f'metadata_{city}.json'
             city_metadata = geofiles.load_json(city_metadata_file)
-            self.samples.extend(city_metadata['samples'])
-        self.samples = [s for s in self.samples if s['split'] == run_type]
+            samples = city_metadata['samples']
+            if city in self.cfg.DATASET.LABELED_CITIES:
+                samples = [s for s in samples if s['split'] == run_type]
+            self.samples.extend(samples)
 
         if no_augmentations:
             self.transform_stream1 = transforms.Compose([augmentations.Numpy2Torch()])

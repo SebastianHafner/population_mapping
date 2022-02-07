@@ -72,25 +72,6 @@ def tiling_argument_parser():
     return parser
 
 
-def dualstream_argument_parser():
-    # https://docs.python.org/3/library/argparse.html#the-add-argument-method
-    parser = argparse.ArgumentParser(description="Experiment Args")
-    parser.add_argument('-c1', "--config-file1", dest='config_file1', required=True, help="path to config file 1")
-    parser.add_argument('-c2', "--config-file2", dest='config_file2', required=True, help="path to config file 2")
-    parser.add_argument('-de', "--debug", dest='debug', required=True, help="run in debug mode")
-    parser.add_argument('-o', "--output-dir", dest='output_dir', required=True, help="path to output directory")
-    parser.add_argument('-d', "--dataset-dir", dest='dataset_dir', default="", required=True,
-                        help="path to output directory")
-
-    parser.add_argument(
-        "opts",
-        help="Modify config options using the command-line",
-        default=None,
-        nargs=argparse.REMAINDER,
-    )
-    return parser
-
-
 def inference_argument_parser():
     # https://docs.python.org/3/library/argparse.html#the-add-argument-method
     parser = argparse.ArgumentParser(description="Experiment Args")
