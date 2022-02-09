@@ -140,7 +140,7 @@ def run_quantitative_assessment_census(cfg: experiment_manager.CfgNode, city: st
     census = metadata['census']
 
     data = {}
-    for unit_nr, unit_pop in tqdm(census.items()):
+    for unit_nr, unit_pop in census.items():
         unit_nr, unit_pop = int(unit_nr), int(unit_pop)
         ds = datasets.CensusPopulationDataset(cfg, city, unit_nr)
         unit_pred = 0
@@ -169,7 +169,7 @@ def run_quantitative_assessment_census_dualstream(dual_cfg: experiment_manager.C
     census = metadata['census']
 
     data = {}
-    for unit_nr, unit_pop in tqdm(census.items()):
+    for unit_nr, unit_pop in census.items():
         unit_nr, unit_pop = int(unit_nr), int(unit_pop)
         ds = datasets.CensusDualInputPopulationDataset(dual_cfg, city, unit_nr)
         unit_pred = 0
@@ -247,7 +247,7 @@ def produce_population_grid(cfg: experiment_manager.CfgNode, city: str):
         ds = datasets.CellInferenceDualInputPopulationDataset(cfg, city)
         arr = ds.get_arr()
         transform, crs = ds.get_geo()
-        for item in tqdm(ds):
+        for item in ds:
             x1 = item['x1'].to(device).unsqueeze(0)
             x2 = item['x2'].to(device).unsqueeze(0)
             i, j = item['i'], item['j']
@@ -258,7 +258,7 @@ def produce_population_grid(cfg: experiment_manager.CfgNode, city: str):
         ds = datasets.CellInferencePopulationDataset(cfg, city)
         arr = ds.get_arr()
         transform, crs = ds.get_geo()
-        for item in tqdm(ds):
+        for item in ds:
             x = item['x'].to(device)
             i, j = item['i'], item['j']
             pred_pop = net(x.unsqueeze(0)).flatten().cpu().item()
