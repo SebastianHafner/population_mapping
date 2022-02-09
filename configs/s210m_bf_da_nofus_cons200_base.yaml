@@ -1,6 +1,9 @@
 _BASE_: "s210m_bf_da_base.yaml"
 DEBUG: False
 
+MODEL:
+  DISABLE_FUSION_LOSS: True
+
 CONSISTENCY_TRAINER:
   LOSS_FACTOR: 2.0
   LOSS_TYPE: 'L2'

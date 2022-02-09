@@ -19,7 +19,7 @@ def save_checkpoint(network, optimizer, epoch, step, cfg: experiment_manager.Cfg
 
 
 def load_checkpoint(epoch, cfg: experiment_manager.CfgNode, device):
-    net = PopulationNet(cfg)
+    net = DualStreamPopulationNet(cfg.MODEL) if cfg.MODEL.DUALSTREAM else PopulationNet(cfg.MODEL)
     net.to(device)
 
     save_file = Path(cfg.PATHS.OUTPUT) / 'networks' / f'{cfg.NAME}_checkpoint{epoch}.pt'

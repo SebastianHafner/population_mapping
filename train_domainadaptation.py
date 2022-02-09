@@ -85,11 +85,16 @@ def run_dual_training(dual_cfg: experiment_manager.CfgNode):
 
                 loss_set_stream1.append(loss_stream1.item())
                 loss_set_stream2.append(loss_stream2.item())
-                loss_set_fusion.append(loss_fusion.item())
 
                 n_labeled += torch.sum(is_labeled).item()
 
-                supervised_loss = loss_stream1 + loss_stream2 + loss_fusion
+                if not dual_cfg.MODEL.DISABLE_FUSION_LOSS:
+                    supervised_loss = loss_stream1 + loss_stream2 + loss_fusion
+                    loss_set_fusion.append(loss_fusion.item())
+                else:
+                    supervised_loss = loss_stream1 + loss_stream2
+                    loss_set_fusion.append(0)
+
                 supervised_loss_set.append(supervised_loss.item())
 
             # consistency loss for semi-supervised training
@@ -169,11 +174,11 @@ def run_dual_training(dual_cfg: experiment_manager.CfgNode):
             print(f'saving network', flush=True)
             networks.save_checkpoint(dual_net, optimizer, epoch, global_step, dual_cfg)
 
-            evaluation.model_evaluation_census_dualstream(dual_net, dual_cfg, 'dakar')
-            evaluation.model_evaluation_cell_dualstream(dual_net, dual_cfg, 'train', epoch_float, global_step,
-                                                        max_samples=1_000)
-            evaluation.model_evaluation_cell_dualstream(dual_net, dual_cfg, 'test', epoch_float, global_step,
-                                                        max_samples=1_000)
+            evaluation.model_evaluation_cell_dualstream(dual_net, dual_cfg, 'train', epoch_float, global_step)
+            evaluation.model_evaluation_cell_dualstream(dual_net, dual_cfg, 'test', epoch_float, global_step)
+            for city in dual_cfg.DATASET.CENSUS_EVALUATION_CITIES:
+                print(f'Running census-level evaluation for {city}...')
+                evaluation.model_evaluation_census_dualstream(dual_net, dual_cfg, city)
 
 
 if __name__ == '__main__':

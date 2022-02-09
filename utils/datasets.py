@@ -334,3 +334,61 @@ class CensusDualInputPopulationDataset(AbstractPopulationMappingDataset):
 
     def __str__(self):
         return f'Dataset with {self.length} samples across {len(self.cities)} sites.'
+
+
+# dataset for urban extraction with building footprints
+class CellInferenceDualInputPopulationDataset(AbstractPopulationMappingDataset):
+
+    def __init__(self, cfg, city: str):
+        super().__init__(cfg)
+
+        self.city = city
+        self.samples = []
+        metadata_file = self.root_path / f'metadata_{city}.json'
+        metadata = geofiles.load_json(metadata_file)
+        self.samples.extend(metadata['samples'])
+        self.transform_stream1 = transforms.Compose([augmentations.Numpy2Torch()])
+        self.transform_stream2 = transforms.Compose([augmentations.Numpy2Torch()])
+        self.length = len(self.samples)
+
+    def __getitem__(self, index):
+        sample = self.samples[index]
+
+        city = sample['city']
+        i, j = sample['i'], sample['j']
+
+        patch_data_stream1 = self._get_patch_data(self.cfg.DATALOADER.FEATURE_STREAM1, city, i, j)
+        patch_data_stream2 = self._get_patch_data(self.cfg.DATALOADER.FEATURE_STREAM2, city, i, j)
+        x1 = self.transform_stream1(patch_data_stream1)
+        x2 = self.transform_stream1(patch_data_stream2)
+
+        item = {
+            'x1': x1,
+            'x2': x2,
+            'i': i,
+            'j': j,
+        }
+
+        return item
+
+    def get_geo(self) -> tuple:
+        sample = self.samples[0]
+        i, j = sample['i'], sample['j']
+        file = self.root_path / 'features' / self.city / 's2' / f's2_{self.city}_{i:03d}-{j:03d}.tif'
+        _, transform, crs = geofiles.read_tif(file)
+        x_min = transform[2] - j * 100
+        y_min = transform[5] - i * -100
+        transform = affine.Affine(100, 0, x_min, 0, -100, y_min)
+        return transform, crs
+
+    def get_arr(self) -> np.ndarray:
+        m = sorted([s['i'] for s in self.samples])[-1] + 1
+        n = sorted([s['j'] for s in self.samples])[-1] + 1
+        arr = np.zeros((m, n, 1), dtype=np.uint16)
+        return arr
+
+    def __len__(self):
+        return self.length
+
+    def __str__(self):
+        return f'Dataset with {self.length} samples across {len(self.cities)} sites.'

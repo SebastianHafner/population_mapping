@@ -17,4 +17,3 @@ DATASET:
   LABELED_CITIES: [ 'dakar' ]
   UNLABELED_CITIES: [ 'nairobi', 'daressalaam' ]
   CENSUS_EVALUATION_CITIES: [ 'dakar', 'nairobi', 'daressalaam' ]
-

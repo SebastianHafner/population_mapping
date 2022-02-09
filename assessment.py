@@ -159,10 +159,44 @@ def run_quantitative_assessment_census(cfg: experiment_manager.CfgNode, city: st
     geofiles.write_json(out_file, data)
 
 
+def run_quantitative_assessment_census_dualstream(dual_cfg: experiment_manager.CfgNode, city: str, run_type: str = 'test'):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    net, *_ = networks.load_checkpoint(cfg.INFERENCE_CHECKPOINT, dual_cfg, device)
+    net.eval()
+
+    metadata_file = Path(dual_cfg.PATHS.DATASET) / f'metadata_{city}.json'
+    metadata = geofiles.load_json(metadata_file)
+    census = metadata['census']
+
+    data = {}
+    for unit_nr, unit_pop in tqdm(census.items()):
+        unit_nr, unit_pop = int(unit_nr), int(unit_pop)
+        ds = datasets.CensusDualInputPopulationDataset(dual_cfg, city, unit_nr)
+        unit_pred = 0
+        unit_gt = 0
+        for i, index in enumerate(range(len(ds))):
+            item = ds.__getitem__(index)
+            x1 = item['x1'].to(device).unsqueeze(0)
+            x2 = item['x2'].to(device).unsqueeze(0)
+            pred_fusion, pred_stream1, _ = net(x1, x2)
+            pop_pred = pred_stream1 if dual_cfg.MODEL.DISABLE_FUSION_LOSS else pred_fusion
+            unit_pred += pop_pred.flatten().cpu().item()
+            unit_gt += item['y'].cpu().item()
+
+        print(f'ID: {unit_nr}: Unit pop: {unit_pop} - Pop GT: {unit_gt:.0f} - Pop Pred: {unit_pred:.0f}')
+        data[str(unit_nr)] = {'ref': unit_pop, 'sum_gt': unit_gt, 'sum_pred': unit_pred, 'split': ds.split}
+
+    out_file = Path(dual_cfg.PATHS.OUTPUT) / 'predictions' / f'{dual_cfg.NAME}_{run_type}_{city}.geojson'
+    geofiles.write_json(out_file, data)
+
+
 def correlation_census(cfg: experiment_manager.CfgNode, city: str, run_type: str = 'test', scale: str = 'linear'):
     pred_file = Path(cfg.PATHS.OUTPUT) / 'predictions' / f'{cfg.NAME}_{run_type}_{city}.geojson'
     if not pred_file.exists():
-        run_quantitative_assessment_census(cfg, city, run_type)
+        if cfg.MODEL.DUALSTREAM:
+            run_quantitative_assessment_census_dualstream(cfg, city, run_type)
+        else:
+            run_quantitative_assessment_census(cfg, city, run_type)
     data = geofiles.load_json(pred_file)
     gts = [v['ref'] for v in data.values() if v['split'] == run_type]
     preds = [v['sum_pred'] for v in data.values() if v['split'] == run_type]
@@ -205,17 +239,30 @@ def correlation_census(cfg: experiment_manager.CfgNode, city: str, run_type: str
 
 
 def produce_population_grid(cfg: experiment_manager.CfgNode, city: str):
-    ds = datasets.CellInferencePopulationDataset(cfg, city)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     net, *_ = networks.load_checkpoint(cfg.INFERENCE_CHECKPOINT, cfg, device)
     net.eval()
-    arr = ds.get_arr()
-    transform, crs = ds.get_geo()
-    for item in tqdm(ds):
-        x = item['x'].to(device)
-        i, j = item['i'], item['j']
-        pred_pop = net(x.unsqueeze(0)).flatten().cpu().item()
-        arr[i, j, 0] = pred_pop
+
+    if cfg.MODEL.DUALSTREAM:
+        ds = datasets.CellInferenceDualInputPopulationDataset(cfg, city)
+        arr = ds.get_arr()
+        transform, crs = ds.get_geo()
+        for item in tqdm(ds):
+            x1 = item['x1'].to(device).unsqueeze(0)
+            x2 = item['x2'].to(device).unsqueeze(0)
+            i, j = item['i'], item['j']
+            pred_fusion, pred_stream1, _  = net(x1, x2)
+            pop_pred = pred_stream1 if cfg.MODEL.DISABLE_FUSION_LOSS else pred_fusion
+            arr[i, j, 0] = pop_pred.flatten().cpu().item()
+    else:
+        ds = datasets.CellInferencePopulationDataset(cfg, city)
+        arr = ds.get_arr()
+        transform, crs = ds.get_geo()
+        for item in tqdm(ds):
+            x = item['x'].to(device)
+            i, j = item['i'], item['j']
+            pred_pop = net(x.unsqueeze(0)).flatten().cpu().item()
+            arr[i, j, 0] = pred_pop
     out_file = Path(cfg.PATHS.OUTPUT) / 'population_grids' / f'pop_{city}_{cfg.NAME}.tif'
     geofiles.write_tif(out_file, arr, transform, crs)
 

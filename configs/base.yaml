@@ -11,6 +11,7 @@ TRAINER:
   OPTIMIZER: 'adamw'
 
 MODEL:
+  DUALSTREAM: False
   TYPE: 'resnet'
   SIZE: 18
   PRETRAINED: True
