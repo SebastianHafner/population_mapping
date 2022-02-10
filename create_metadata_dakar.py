@@ -4,6 +4,7 @@ from utils import geofiles, parsers
 import geopandas as gpd
 
 
+# -f vhr s2 bf -r C:/Users/shafner/population_mapping/raw_data -d C:/Users/shafner/datasets/pop_dataset
 def assemble_metadata(features: list, raw_data_path: str, dataset_path: str):
     city = 'dakar'
     # getting the dimensions of the population file first

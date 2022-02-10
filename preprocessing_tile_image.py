@@ -8,12 +8,12 @@ from utils import geofiles, parsers
 # x min, x max, y min, y max
 # extent dakar [227600, 256500, 1620600, 1639800]
 # extent nairobi [240100, 289150, 9840110, 9871640]
-# extent daressalaam [508530, 542730, 9226610, 9268710]
-# extent ouagadougou []
+# extent daressalaam [508530, 542730, 9226610, 9268710] new [509630, 542730, 9231810, 9268710]
+# extent ouagadougou [645070, 671170, 1355620, 1382420]
 # -c nairobi -f vhr -e 240100 289150 9840110 9871640 -p 100 -r C:/Users/shafner/population_mapping/raw_data -d C:/Users/shafner/datasets/pop_dataset
 # -c dakar -f vhr -e 227600 256500 1620600 1639800 -p 100 -r C:/Users/shafner/population_mapping/raw_data -d C:/Users/shafner/datasets/pop_dataset
-
-
+# -c daressalaam -f s2 -e 509630 542730 9231810 9268710 -p 100 -r C:/Users/shafner/population_mapping/raw_data -d C:/Users/shafner/datasets/pop_dataset
+# -c ouagadougou -f s2 -e 645070 671170 1355620 1382420 -p 100 -r C:/Users/shafner/population_mapping/raw_data -d C:/Users/shafner/population_mapping/pop_dataset
 # split a feature (e.g. vhr satellite data) into patches
 def tile_image(city: str, feature: str, extent: list, patch_size: int, raw_data_path: str, dataset_path: str):
     output_dir = Path(dataset_path) / 'features' / city / feature

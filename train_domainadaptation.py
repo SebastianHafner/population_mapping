@@ -199,7 +199,7 @@ if __name__ == '__main__':
     wandb.init(
         name=dual_cfg.NAME,
         config=dual_cfg,
-        entity='population_mapping',
+        entity='population_mapping_v2',
         tags=['run', 'population', 'mapping', 'regression', ],
         mode='online' if not dual_cfg.DEBUG else 'disabled',
     )

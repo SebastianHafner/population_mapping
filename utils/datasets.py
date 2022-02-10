@@ -28,7 +28,10 @@ class AbstractPopulationMappingDataset(torch.utils.data.Dataset):
     # generic data loading function used for different features (e.g. vhr satellite data)
     def _get_patch_data(self, feature: str, city: str, i: int, j: int) -> np.ndarray:
         file = self.root_path / 'features' / city / feature / f'{feature}_{city}_{i:03d}-{j:03d}.tif'
-        img, _, _ = geofiles.read_tif(file)
+        if feature == 'bf' and city == 'ouagadougou':
+            img = np.zeros((self.patch_size, self.patch_size, 1), dtype=np.float32)
+        else:
+            img, _, _ = geofiles.read_tif(file)
 
         if feature == 'vhr':
             band_indices = self.cfg.DATALOADER.VHR_BAND_INDICES
@@ -40,6 +43,8 @@ class AbstractPopulationMappingDataset(torch.utils.data.Dataset):
 
         if feature == 'vhr':
             img = np.clip(img / self.cfg.DATALOADER.VHR_MAX_REFLECTANCE, 0, 1)
+        if feature == 's2':
+            img = np.clip(img / 10_000, 0, 1)
 
         # resampling images to desired patch size
         if img.shape[0] != self.patch_size or img.shape[1] != self.patch_size:

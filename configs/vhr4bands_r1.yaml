@@ -1,0 +1,3 @@
+_BASE_: "vhr4bands_base.yaml"
+SEED: 1
+DEBUG: False

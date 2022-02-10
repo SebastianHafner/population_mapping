@@ -4,6 +4,7 @@ from utils import geofiles, parsers
 import geopandas as gpd
 
 
+# -f s2 bf -r C:/Users/shafner/population_mapping/raw_data -d C:/Users/shafner/datasets/pop_dataset
 def assemble_metadata(features: list, raw_data_path: str, dataset_path: str):
     city = 'daressalaam'
     metadata = {
@@ -14,11 +15,11 @@ def assemble_metadata(features: list, raw_data_path: str, dataset_path: str):
     }
 
     # rasterized version of census file with 'cat' as pixel value (0 is no census)
-    units_file = Path(raw_data_path) / city / f'census_grid.tif'
+    units_file = Path(raw_data_path) / city / f'census_grid_cloudfree.tif'
     units, _, _ = geofiles.read_tif(units_file)
     # pixel values are population for 100 m grid
-    pop_file = Path(raw_data_path) / city / f'pop_resampled.tiff'
-    pop, _, _ = geofiles.read_tif(pop_file)
+    # pop_file = Path(raw_data_path) / city / f'pop_resampled.tiff'
+    # pop, _, _ = geofiles.read_tif(pop_file)
 
     for index, unit in np.ndenumerate(units):
         i, j, _ = index
@@ -31,7 +32,7 @@ def assemble_metadata(features: list, raw_data_path: str, dataset_path: str):
         else:
             sample = {
                 'city': city,
-                'population': float(pop[index]),
+                'population': -1,  # float(pop[index])
                 'i': i,
                 'j': j,
                 'split': 'test',
@@ -42,7 +43,7 @@ def assemble_metadata(features: list, raw_data_path: str, dataset_path: str):
                 assert (patch_file.exists())
             metadata['samples'].append(sample)
 
-    census_file = Path(raw_data_path) / city / f'gridded_spatial_units.shp'
+    census_file = Path(raw_data_path) / city / f'gridded_spatial_units_cloudfree.shp'
     gdf = gpd.read_file(census_file)
     for index, row in gdf.iterrows():
         unit_nr = row['cat']
