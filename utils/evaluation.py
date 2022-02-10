@@ -149,7 +149,7 @@ def model_evaluation_cell_dualstream(dual_net: networks.DualStreamPopulationNet,
     rmse_fusion = measurer_fusion.root_mean_square_error()
     print(f'RMSE {run_type} {rmse_fusion:.3f}')
     wandb.log({
-        f'{run_type} rmse': rmse_fusion,
+        f'{run_type} rmse': rmse_stream1 if dual_cfg.MODEL.DISABLE_FUSION_LOSS else rmse_fusion,
         f'{run_type} rmse_stream1': rmse_stream1,
         f'{run_type} rmse_stream2': rmse_stream2,
         'step': step,
@@ -196,8 +196,8 @@ def model_evaluation_census_dualstream(dual_net: networks.DualStreamPopulationNe
     rsquare_stream2 = measurer_stream2.r_square()
 
     wandb.log({
-        f'{city} rmse': rmse_fusion,
-        f'{city} r2': rsquare_fusion,
+        f'{city} rmse': rmse_stream1 if dual_cfg.MODEL.DISABLE_FUSION_LOSS else rmse_fusion,
+        f'{city} r2': rsquare_stream1 if dual_cfg.MODEL.DISABLE_FUSION_LOSS else rsquare_fusion,
         f'{city} rmse_stream1': rmse_stream1,
         f'{city} r2_stream1': rsquare_stream1,
         f'{city} rmse_stream2': rmse_stream2,

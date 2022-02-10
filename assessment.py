@@ -264,7 +264,7 @@ def produce_population_grid(cfg: experiment_manager.CfgNode, city: str):
             x1 = item['x1'].to(device).unsqueeze(0)
             x2 = item['x2'].to(device).unsqueeze(0)
             i, j = item['i'], item['j']
-            pred_fusion, pred_stream1, _  = net(x1, x2)
+            pred_fusion, pred_stream1, _ = net(x1, x2)
             pop_pred = pred_stream1 if cfg.MODEL.DISABLE_FUSION_LOSS else pred_fusion
             arr[i, j, 0] = pop_pred.flatten().cpu().item()
     else:
