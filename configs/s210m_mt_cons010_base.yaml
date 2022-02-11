@@ -1,0 +1,6 @@
+_BASE_: "s210m_mt_base.yaml"
+DEBUG: False
+
+CONSISTENCY_TRAINER:
+  LOSS_FACTOR: 0.1
+  LOSS_TYPE: 'L2'

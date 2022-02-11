@@ -1,0 +1,35 @@
+_BASE_: "mt_base.yaml"
+DEBUG: False
+
+MODEL:
+  OUT_CHANNELS: 1
+  IN_CHANNELS: 4
+
+DATALOADER:
+  FEATURES: ['s2']
+  FEATURE_STREAM1: 's2'
+  FEATURE_STREAM2: 's2'
+  S2_BAND_INDICES: [ 2, 1, 0, 3 ]
+
+ DATASET:
+   LABELED_CITIES: [ 'dakar' ]
+   UNLABELED_CITIES: [ 'nairobi', 'daressalaam' ]
+   CENSUS_EVALUATION_CITIES: [ 'dakar', 'nairobi', 'daressalaam', 'ouagadougou' ]
+
+AUGMENTATION:
+  STREAM1:
+    RANDOM_FLIP: True
+    RANDOM_ROTATE: True
+    COLOR_SHIFT: False
+    GAMMA_CORRECTION: False
+    DOWNSAMPLING: 1
+  STREAM2:
+    RANDOM_FLIP: True
+    RANDOM_ROTATE: True
+    COLOR_SHIFT: False
+    GAMMA_CORRECTION: False
+    DOWNSAMPLING: 1
+
+CONSISTENCY_TRAINER:
+  LOSS_FACTOR: 0.5
+  LOSS_TYPE: 'L2'

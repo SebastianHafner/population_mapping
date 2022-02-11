@@ -10,10 +10,10 @@ from tabulate import tabulate
 import wandb
 import numpy as np
 
-from utils import networks, datasets, loss_functions, evaluation, experiment_manager
+from utils import networks, datasets, loss_functions, evaluation, experiment_manager, parsers
 
 
-def run_mean_teacher_training(net, cfg):
+def run_mean_teacher_training(cfg):
     run_config = {
         'CONFIG_NAME': cfg.NAME,
         'device': device,
@@ -26,16 +26,15 @@ def run_mean_teacher_training(net, cfg):
              }
     print(tabulate(table, headers='keys', tablefmt="fancy_grid", ))
 
-    optimizer = optim.AdamW(net.parameters(), lr=cfg.TRAINER.LR, weight_decay=0.01)
+    student_net = networks.PopulationNet(cfg.MODEL)
+    optimizer = optim.AdamW(student_net.parameters(), lr=cfg.TRAINER.LR, weight_decay=0.01)
     supervised_criterion = loss_functions.get_criterion(cfg.MODEL.LOSS_TYPE)
-
-    student_net = net
     teacher_net = networks.create_ema_network(student_net, cfg)
     student_net.to(device)
     teacher_net.to(device)
-    consistency_criterion = loss_functions.get_criterion(cfg.CONSISTENCY_TRAINER.CONSISTENCY_LOSS_TYPE)
+    consistency_criterion = loss_functions.get_criterion(cfg.CONSISTENCY_TRAINER.LOSS_TYPE)
 
-    dataset = datasets.PopulationMappingDataset(cfg=cfg, run_type='training', include_unlabeled=True)
+    dataset = datasets.CellDualInputPopulationDataset(dual_cfg=cfg, run_type='train')
     print(dataset)
     dataloader_kwargs = {
         'batch_size': cfg.TRAINER.BATCH_SIZE,
@@ -66,21 +65,22 @@ def run_mean_teacher_training(net, cfg):
             student_net.train()
             teacher_net.train()
 
+            # TODO: check if this should be done on student net
             optimizer.zero_grad()
 
-            x = batch['x'].to(device)
-            y_gts = batch['y'].to(device)
-            pop_set.append(y_gts.flatten())
-            is_labeled = batch['is_labeled']
+            x1 = batch['x1'].to(device)
+            x2 = batch['x2'].to(device)
+            gt = batch['y'].to(device).float()
+            is_labeled = batch['is_labeled'].to(device)
 
-            y_pred_student = student_net(x)
-            y_pred_teacher = teacher_net(x)
+            y_pred_student = student_net(x1)
+            y_pred_teacher = teacher_net(x2)
             y_pred_teacher = y_pred_teacher.detach()
 
             supervised_loss, consistency_loss = None, None
 
             if is_labeled.any():
-                supervised_loss = supervised_criterion(y_pred_student[is_labeled,], y_gts[is_labeled])
+                supervised_loss = supervised_criterion(y_pred_student[is_labeled,], gt[is_labeled])
                 supervised_loss_set.append(supervised_loss.item())
                 n_labeled += torch.sum(is_labeled).item()
 
@@ -108,8 +108,9 @@ def run_mean_teacher_training(net, cfg):
                 print(f'Logging step {global_step} (epoch {epoch_float:.2f}).')
 
                 # evaluation on sample of training and validation set
-                evaluation.model_evaluation(net, cfg, 'training', epoch_float, global_step, max_samples=1_000)
-                evaluation.model_evaluation(net, cfg, 'test', epoch_float, global_step, max_samples=1_000)
+                # evaluation on sample of training and validation set
+                evaluation.model_evaluation_cell(teacher_net, cfg, 'train', epoch_float, global_step, max_samples=1_000)
+                evaluation.model_evaluation_cell(teacher_net, cfg, 'test', epoch_float, global_step, max_samples=1_000)
 
                 # logging
                 time = timeit.default_timer() - start
@@ -136,23 +137,28 @@ def run_mean_teacher_training(net, cfg):
 
             if cfg.DEBUG:
                 # testing evaluation
-                evaluation.model_evaluation(net, cfg, 'training', epoch_float, global_step, max_samples=1_000)
-                evaluation.model_evaluation(net, cfg, 'test', epoch_float, global_step, max_samples=1_000)
+                # evaluation on sample of training and validation set
+                evaluation.model_evaluation_cell(teacher_net, cfg, 'train', epoch_float, global_step, max_samples=1_000)
+                evaluation.model_evaluation_cell(teacher_net, cfg, 'test', epoch_float, global_step, max_samples=1_000)
+                evaluation.model_evaluation_census(teacher_net, cfg, 'dakar')
                 break
             # end of batch
 
         if epoch in save_checkpoints and not cfg.DEBUG:
             print(f'saving network', flush=True)
-            networks.save_checkpoint(net, optimizer, epoch, global_step, cfg)
+            networks.save_checkpoint(teacher_net, optimizer, epoch, global_step, cfg)
 
             # logs to load network
-            evaluation.model_evaluation(net, cfg, 'training', epoch_float, global_step)
-            evaluation.model_evaluation(net, cfg, 'test', epoch_float, global_step)
+            # evaluation on sample of training and validation set
+            evaluation.model_evaluation_cell(teacher_net, cfg, 'train', epoch_float, global_step)
+            evaluation.model_evaluation_cell(teacher_net, cfg, 'test', epoch_float, global_step)
+            for city in cfg.DATASET.CENSUS_EVALUATION_CITIES:
+                print(f'Running census-level evaluation for {city}...')
+                evaluation.model_evaluation_census(teacher_net, cfg, city)
 
 
 if __name__ == '__main__':
-
-    args = experiment_manager.default_argument_parser().parse_known_args()[0]
+    args = parsers.training_argument_parser().parse_known_args()[0]
     cfg = experiment_manager.setup_cfg(args)
 
     # make training deterministic
@@ -165,14 +171,13 @@ if __name__ == '__main__':
 
     print('=== Runnning on device: p', device)
 
-    if not cfg.DEBUG:
-        wandb.init(
-            name=cfg.NAME,
-            config=cfg,
-            entity='population_mapping',
-            tags=['run', 'population', 'mapping', 'regression', ],
-        )
-
+    wandb.init(
+        name=cfg.NAME,
+        config=cfg,
+        entity='population_mapping',
+        tags=['run', 'population', 'mapping', 'regression', ],
+        mode='online' if not cfg.DEBUG else 'disabled',
+    )
     try:
         run_mean_teacher_training(cfg)
     except KeyboardInterrupt:
