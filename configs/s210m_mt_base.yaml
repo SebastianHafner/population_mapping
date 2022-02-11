@@ -11,10 +11,10 @@ DATALOADER:
   FEATURE_STREAM2: 's2'
   S2_BAND_INDICES: [ 2, 1, 0, 3 ]
 
- DATASET:
-   LABELED_CITIES: [ 'dakar' ]
-   UNLABELED_CITIES: [ 'nairobi', 'daressalaam' ]
-   CENSUS_EVALUATION_CITIES: [ 'dakar', 'nairobi', 'daressalaam', 'ouagadougou' ]
+DATASET:
+  LABELED_CITIES: [ 'dakar' ]
+  UNLABELED_CITIES: [ 'nairobi', 'daressalaam' ]
+  CENSUS_EVALUATION_CITIES: [ 'dakar', 'nairobi', 'daressalaam', 'ouagadougou' ]
 
 AUGMENTATION:
   STREAM1:
