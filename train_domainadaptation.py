@@ -200,7 +200,7 @@ if __name__ == '__main__':
         name=dual_cfg.NAME,
         config=dual_cfg,
         entity='population_mapping',
-        project='experiments_paper1',
+        project=args.project,
         tags=['run', 'population', 'mapping', 'regression', ],
         mode='online' if not dual_cfg.DEBUG else 'disabled',
     )
