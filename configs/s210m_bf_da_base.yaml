@@ -15,5 +15,5 @@ DATALOADER:
 
 DATASET:
   LABELED_CITIES: [ 'dakar' ]
-  UNLABELED_CITIES: [ 'nairobi', 'daressalaam' ]
+  UNLABELED_CITIES: [ 'nairobi', 'daressalaam', 'ouagadougou' ]
   CENSUS_EVALUATION_CITIES: [ 'dakar', 'nairobi', 'daressalaam', 'ouagadougou' ]
