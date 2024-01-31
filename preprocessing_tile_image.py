@@ -14,6 +14,7 @@ from utils import geofiles, parsers
 # -c dakar -f vhr -e 227600 256500 1620600 1639800 -p 100 -r C:/Users/shafner/population_mapping/raw_data -d C:/Users/shafner/datasets/pop_dataset
 # -c daressalaam -f s2 -e 509630 542730 9231810 9268710 -p 100 -r C:/Users/shafner/population_mapping/raw_data -d C:/Users/shafner/datasets/pop_dataset
 # -c ouagadougou -f s2 -e 645070 671170 1355620 1382420 -p 100 -r C:/Users/shafner/population_mapping/raw_data -d C:/Users/shafner/datasets/pop_dataset
+# -c ndjamena -f s2 -e 488170 519470 1325680 1350580 -p 100 -r C:/Users/shafner/population_mapping/raw_data -d C:/Users/shafner/datasets/pop_dataset
 # split a feature (e.g. vhr satellite data) into patches
 def tile_image(city: str, feature: str, extent: list, patch_size: int, raw_data_path: str, dataset_path: str):
     output_dir = Path(dataset_path) / 'features' / city / feature

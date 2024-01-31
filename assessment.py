@@ -285,4 +285,4 @@ if __name__ == '__main__':
     cfg = experiment_manager.setup_cfg(args)
     for city in args.sites:
         produce_population_grid(cfg, city)
-        correlation_census(cfg, city)
+        # correlation_census(cfg, city)

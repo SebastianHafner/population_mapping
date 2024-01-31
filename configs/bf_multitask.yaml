@@ -1,0 +1,13 @@
+_BASE_: "base.yaml"
+DEBUG: False
+
+MODEL:
+  IN_CHANNELS: 1
+  MULTI_TASK: True
+
+DATALOADER:
+  FEATURES: [ 'bf' ]
+
+DATASET:
+  LABELED_CITIES: [ 'dakar' ]
+  CENSUS_EVALUATION_CITIES: [ 'dakar', 'nairobi', 'daressalaam', 'ouagadougou' ]

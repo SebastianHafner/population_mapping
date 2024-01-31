@@ -126,59 +126,66 @@ class PopulationNet(nn.Module):
         return x
 
 
-# https://www.zijianhu.com/post/pytorch/ema/
-class EMA(nn.Module):
-    def __init__(self, model: nn.Module, decay: float):
-        super().__init__()
-        self.decay = decay
+class PopulationNetMultiTask(nn.Module):
 
-        self.model = model
-        self.ema_model = deepcopy(self.model)
+    def __init__(self, model_cfg):
+        super(PopulationNetMultiTask, self).__init__()
+        self.model_cfg = model_cfg
+        pt = model_cfg.PRETRAINED
+        assert (model_cfg.TYPE == 'resnet')
+        if model_cfg.SIZE == 18:
+            self.model = torchvision.models.resnet18(pretrained=pt)
+        elif model_cfg.SIZE == 50:
+            self.model = torchvision.models.resnet50(pretrained=pt)
+        else:
+            raise Exception(f'Unkown resnet size ({model_cfg.SIZE}).')
 
-        for param in self.ema_model.parameters():
-            param.detach_()
+        new_in_channels = model_cfg.IN_CHANNELS
 
-    @torch.no_grad()
-    def update(self):
-        if not self.training:
-            print("EMA update should only be called during training", file=stderr, flush=True)
-            return
+        if new_in_channels != 3:
+            # only implemented for resnet
+            assert (model_cfg.TYPE == 'resnet')
 
-        model_params = OrderedDict(self.model.named_parameters())
-        ema_model_params = OrderedDict(self.ema_model.named_parameters())
+            first_layer = self.model.conv1
+            # Creating new Conv2d layer
+            new_first_layer = nn.Conv2d(
+                in_channels=new_in_channels,
+                out_channels=first_layer.out_channels,
+                kernel_size=first_layer.kernel_size,
+                stride=first_layer.stride,
+                padding=first_layer.padding,
+                bias=first_layer.bias
+            )
+            # he initialization
+            nn.init.kaiming_uniform_(new_first_layer.weight.data, mode='fan_in', nonlinearity='relu')
+            if new_in_channels > 3:
+                # replace weights of first 3 channels with resnet rgb ones
+                first_layer_weights = first_layer.weight.data.clone()
+                new_first_layer.weight.data[:, :first_layer.in_channels, :, :] = first_layer_weights
+            # if it is less than 3 channels we use he initialization (no pretraining)
 
-        # check if both model contains the same set of keys
-        assert model_params.keys() == ema_model_params.keys()
+            # replacing first layer
+            self.model.conv1 = new_first_layer
+            # https://discuss.pytorch.org/t/how-to-change-no-of-input-channels-to-a-pretrained-model/19379/2
+            # https://discuss.pytorch.org/t/how-to-modify-the-input-channels-of-a-resnet-model/2623/10
 
-        for name, param in model_params.items():
-            # see https://www.tensorflow.org/api_docs/python/tf/train/ExponentialMovingAverage
-            # shadow_variable -= (1 - decay) * (shadow_variable - variable)
-            ema_model_params[name].sub_((1. - self.decay) * (ema_model_params[name] - param))
+        # replacing fully connected layer
+        num_ftrs = self.model.fc.in_features
+        self.model.fc = nn.Linear(num_ftrs, model_cfg.OUT_CHANNELS)
+        self.relu = torch.nn.ReLU()
+        self.encoder = torch.nn.Sequential(*(list(self.model.children())[:-1]))
+        self.fc_class = nn.Linear(num_ftrs, 2)
+        self.softmax = nn.Softmax(dim=1)
 
-        model_buffers = OrderedDict(self.model.named_buffers())
-        ema_model_buffers = OrderedDict(self.ema_model.named_buffers())
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        f = self.encoder(x)
+        f = torch.flatten(f, start_dim=1)
+        out1 = self.relu(self.model.fc(f))
+        out2 = self.fc_class(f)
 
-        # check if both model contains the same set of keys
-        assert model_buffers.keys() == ema_model_buffers.keys()
-
-        for name, buffer in model_buffers.items():
-            # buffers are copied
-            ema_model_buffers[name].copy_(buffer)
-
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        return self.ema_model(inputs)
-
-    def get_ema_model(self):
-        return self.ema_model
-
-    def get_model(self):
-        return self.model
-
-
-if __name__ == '__main__':
-    x = torch.randn(1, 5, 224, 224)
-    model = torchvision.models.vgg16(pretrained=False)  # pretrained=False just for debug reasons
-    first_conv_layer = [nn.Conv2d(5, 3, kernel_size=3, stride=1, padding=1, dilation=1, groups=1, bias=True)]
-    first_conv_layer.extend(list(model.features))
-    model.features = nn.Sequential(*first_conv_layer)
-    output = model(x)
+        if self.training:
+            return out1, out2
+        else:
+            out2 = torch.argmax(self.softmax(out2), dim=1)
+            out = out1 * torch.logical_not(out2.bool()).float()
+            return out
