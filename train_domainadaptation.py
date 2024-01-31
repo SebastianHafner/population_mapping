@@ -14,18 +14,6 @@ from utils import networks, datasets, loss_functions, evaluation, experiment_man
 
 
 def run_dual_training(dual_cfg: experiment_manager.CfgNode):
-    run_config = {
-        'CONFIG_NAME': dual_cfg.NAME,
-        'device': device,
-        'epochs': dual_cfg.TRAINER.EPOCHS,
-        'learning rate': dual_cfg.TRAINER.LR,
-        'batch size': dual_cfg.TRAINER.BATCH_SIZE,
-    }
-    table = {'run config name': run_config.keys(),
-             ' ': run_config.values(),
-             }
-    print(tabulate(table, headers='keys', tablefmt="fancy_grid", ))
-
     dual_net = networks.DualStreamPopulationNet(dual_cfg.MODEL)
     dual_net.to(device)
     optimizer = optim.AdamW(dual_net.parameters(), lr=dual_cfg.TRAINER.LR, weight_decay=0.01)
@@ -182,7 +170,6 @@ def run_dual_training(dual_cfg: experiment_manager.CfgNode):
 
 
 if __name__ == '__main__':
-
     args = parsers.training_argument_parser().parse_known_args()[0]
     dual_cfg = experiment_manager.setup_cfg(args)
 
@@ -199,7 +186,6 @@ if __name__ == '__main__':
     wandb.init(
         name=dual_cfg.NAME,
         config=dual_cfg,
-        entity='population_mapping',
         project=args.project,
         tags=['run', 'population', 'mapping', 'regression', ],
         mode='online' if not dual_cfg.DEBUG else 'disabled',

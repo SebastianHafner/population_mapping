@@ -104,7 +104,7 @@ def run_training(cfg):
                 wandb.log({
                     'loss': np.mean(loss_set),
                     'loss_pop': np.mean(loss_pop_set),
-                    'loss_hab': np.mean(loss_inhab_set),
+                    'loss_inhab': np.mean(loss_inhab_set),
                     'labeled_percentage': 100,
                     'mean_population': mean_pop,
                     'null_percentage': null_percentage,
