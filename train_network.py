@@ -127,7 +127,6 @@ def run_training(cfg):
 
 
 if __name__ == '__main__':
-
     args = parsers.training_argument_parser().parse_known_args()[0]
     cfg = experiment_manager.setup_cfg(args)
 
@@ -144,7 +143,6 @@ if __name__ == '__main__':
     wandb.init(
         name=cfg.NAME,
         config=cfg,
-        entity='population_mapping',
         project=args.project,
         tags=['run', 'population', 'mapping', 'regression', ],
         mode='online' if not cfg.DEBUG else 'disabled',

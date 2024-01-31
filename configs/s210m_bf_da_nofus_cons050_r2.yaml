@@ -1,3 +1,0 @@
-_BASE_: "s210m_bf_da_nofus_cons050_base.yaml"
-SEED: 2
-DEBUG: False

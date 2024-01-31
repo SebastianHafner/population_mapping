@@ -103,8 +103,8 @@ def run_training(cfg):
                 inhab_percentage = torch.sum(torch.cat(inhab_set)) / torch.numel(torch.cat(inhab_set)) * 100
                 wandb.log({
                     'loss': np.mean(loss_set),
-                    'loss_pop': np.mean(loss_pop),
-                    'loss_hab': np.mean(loss_inhab),
+                    'loss_pop': np.mean(loss_pop_set),
+                    'loss_hab': np.mean(loss_inhab_set),
                     'labeled_percentage': 100,
                     'mean_population': mean_pop,
                     'null_percentage': null_percentage,
@@ -114,7 +114,7 @@ def run_training(cfg):
                     'epoch': epoch_float,
                 })
                 start = timeit.default_timer()
-                loss_set, loss_pop_set, loss_hab_set, pop_set, hab_set = [], [], [], [], []
+                loss_set, loss_pop_set, loss_hab_set, pop_set, inhab_set = [], [], [], [], []
 
             if cfg.DEBUG:
                 # testing evaluation

@@ -1,3 +1,0 @@
-_BASE_: "s210m_gamma_bf_ef_base.yaml"
-SEED: 3
-DEBUG: False

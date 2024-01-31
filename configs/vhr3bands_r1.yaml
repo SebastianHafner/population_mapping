@@ -1,3 +1,0 @@
-_BASE_: "vhr3bands_base.yaml"
-SEED: 1
-DEBUG: False
